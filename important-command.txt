@@ -1,0 +1,8 @@
+php artisan queue:work
+php artisan db:seed
+
+stripe listen --forward-to http://localhost:8000/api/v1/payment/webhook
+
+https://overapprehensive-optatively-meri.ngrok-free.dev/api/v1
+
+ngrok http 8000

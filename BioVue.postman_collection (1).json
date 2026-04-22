@@ -1,0 +1,3446 @@
+{
+  "info": {
+    "_postman_id": "1e62baa8-5643-4d8d-9356-141f24c5a45a",
+    "name": "BioVue",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "52785171",
+    "_collection_link": "https://go.postman.co/collection/50961134-1e62baa8-5643-4d8d-9356-141f24c5a45a?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "// {\r\n//     \"name\": \"Mehin khan\",\r\n//     \"email\": \"womag66426@7novels.com\",\r\n//     \"password\": \"Password@123\",\r\n//     \"password_confirmation\": \"Password@123\",\r\n//     \"role\": \"individual\",\r\n//     \"terms_accepted\": true,\r\n//     \"user_type\": \"individual\" //individual, professional\r\n    //\"profession_type\": \"trainer_coach\" //supplement_supplier, nutritionist, trainer_coach\r\n// }\r\n\r\n{\r\n    \"name\": \"Mehin Khan\",\r\n    \"email\": \"pro1@example.com\",\r\n    \"password\": \"Password@123\",\r\n    \"password_confirmation\": \"Password@123\",\r\n    \"role\": \"professional\",\r\n    \"terms_accepted\": true,\r\n    \"user_type\": \"professional\",\r\n    \"profession_type\": \"trainer_coach\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/register",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "register"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "otp-verify(register otp,resend otp,forgot otp all otp verify route)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"email\": \"hecofab110@oremal.com\",\r\n    \"otp\": \"84568\"\r\n   \r\n}\r\n"
+            },
+            "url": {
+              "raw": "{{url}}/verify-otp",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "verify-otp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"admin@example.com\",\r\n  \"password\": \"Password123!\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/login",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "login"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "resend-otp",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"hecofab110@oremal.com\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/resend-otp",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "resend-otp"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "forgot-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"takifew930@noihse.com\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/forgot-password",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "forgot-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "reset-password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "\r\n{\r\n  \"email\": \"takifew930@noihse.com\",\r\n  \"new_password\": \"NewPass@123\",\r\n  \"new_password_confirmation\": \"NewPass@123\"\r\n}\r\n",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/reset-password",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "reset-password"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "login-with fire(google login)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"firebase_token\": \"eyJhbGciOiJSUzI1NiIsImtpZCI6Ij...\"\r\n}\r\n"
+            },
+            "url": {
+              "raw": "{{url}}/login",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "login"
+              ]
+            }
+          },
+          "response": []
+        }
+      ],
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {},
+            "exec": [
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Terms and Condition",
+      "item": [
+        {
+          "name": "show",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{url}}/terms",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "terms"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "edit",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/terms",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "terms"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Profile",
+          "item": [
+            {
+              "name": "show-all-user-profile",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/profile",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "profile"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "create-update-profile",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "user_id",
+                      "value": "2",
+                      "type": "text"
+                    },
+                    {
+                      "key": "age",
+                      "value": " 26",
+                      "type": "text"
+                    },
+                    {
+                      "key": "sex",
+                      "value": " Male",
+                      "type": "text"
+                    },
+                    {
+                      "key": "height",
+                      "value": " 165",
+                      "type": "text"
+                    },
+                    {
+                      "key": "weight",
+                      "value": " 68",
+                      "type": "text"
+                    },
+                    {
+                      "key": "body_fat",
+                      "value": " 12",
+                      "type": "text"
+                    },
+                    {
+                      "key": "location",
+                      "value": " cumilla",
+                      "type": "text"
+                    },
+                    {
+                      "key": "agreed_terms",
+                      "value": " 1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "smoking_status",
+                      "value": " 0",
+                      "type": "text"
+                    },
+                    {
+                      "key": "alcohol_consumption",
+                      "value": " 0",
+                      "type": "text"
+                    },
+                    {
+                      "key": "stress_level",
+                      "value": " 5",
+                      "type": "text"
+                    },
+                    {
+                      "key": "daily_step",
+                      "value": " 8500",
+                      "type": "text"
+                    },
+                    {
+                      "key": "sleep_hour",
+                      "value": " 7.5",
+                      "type": "text"
+                    },
+                    {
+                      "key": "water_consumption_week",
+                      "value": " 14 liters",
+                      "type": "text"
+                    },
+                    {
+                      "key": "overall_diet_quality",
+                      "value": " Good",
+                      "type": "text"
+                    },
+                    {
+                      "key": "fast_food_frequency",
+                      "value": " Once a week",
+                      "type": "text"
+                    },
+                    {
+                      "key": "strength_training_week",
+                      "value": " 3 sessions",
+                      "type": "text"
+                    },
+                    {
+                      "key": "workout_week",
+                      "value": " 5 sessions",
+                      "type": "text"
+                    },
+                    {
+                      "key": "is_athletic",
+                      "value": " 1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "toned",
+                      "value": " 1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "lean",
+                      "value": " 0",
+                      "type": "text"
+                    },
+                    {
+                      "key": "muscular",
+                      "value": " 1",
+                      "type": "text"
+                    },
+                    {
+                      "key": "curvy_fit",
+                      "value": " 0",
+                      "type": "text"
+                    },
+                    {
+                      "key": "notes",
+                      "value": " Focused on muscle gain and endurance.",
+                      "type": "text"
+                    },
+                    {
+                      "key": "id",
+                      "value": "2",
+                      "type": "text",
+                      "uuid": "0924e84b-faa3-4191-8183-61e49dbea060"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "uuid": "3397253b-13c7-43d9-9e8d-7969732a02aa",
+                      "src": [
+                        "/C:/Users/Betopia/Downloads/f66f122c0092f8173dacaa0d9d1bdec9a50a702d.jpg",
+                        "/C:/Users/Betopia/Downloads/82f0211cfef1f4ade2ba3fb38b0901f5182dc01c.jpg",
+                        "/C:/Users/Betopia/Downloads/db03905b9547d64730a79d53fb06d1fc122cd5bc (1).jpg"
+                      ]
+                    },
+                    {
+                      "key": "user_type",
+                      "value": "professional",
+                      "description": "individual, professional",
+                      "type": "text",
+                      "uuid": "5184f344-8345-4193-8922-2dca2b44df41"
+                    },
+                    {
+                      "key": "profession_type",
+                      "value": "trainer_coach",
+                      "description": "supplement_supplier, nutritionist, trainer_coach",
+                      "type": "text",
+                      "uuid": "fb436efd-66e7-42ef-b3c4-718891d8d28e"
+                    },
+                    {
+                      "key": "bio",
+                      "value": "This is bio",
+                      "type": "text",
+                      "uuid": "a1042463-a5ef-4d2a-994d-c2408a3d77a0"
+                    },
+                    {
+                      "key": "specialties[]",
+                      "value": "Habit Building",
+                      "type": "text",
+                      "uuid": "e86245ae-cd7d-4280-a453-ff2b9d1c6729"
+                    },
+                    {
+                      "key": "specialties[]",
+                      "value": "Strength",
+                      "type": "text",
+                      "uuid": "c6c9c219-d89d-4acd-8dff-58dfcfe4de35"
+                    },
+                    {
+                      "key": "specialties[]",
+                      "value": "Fat Loss",
+                      "type": "text",
+                      "uuid": "8145af2d-ad38-4d8b-877f-5d70a58aa4d0"
+                    },
+                    {
+                      "key": "services[]",
+                      "value": "Monitor your progress",
+                      "type": "text",
+                      "uuid": "09d591aa-f0ff-4229-b693-ea88274404e6"
+                    },
+                    {
+                      "key": "services[]",
+                      "value": "Set personalized goals",
+                      "type": "text",
+                      "uuid": "7953199e-da9b-43f9-927d-8a6a74699234"
+                    },
+                    {
+                      "key": "experience_years",
+                      "value": "5",
+                      "type": "text",
+                      "uuid": "529805d5-6802-4f66-9edf-0b09080c20f4"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{url}}/profile",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "profile"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "single-user",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/profile/1",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "profile",
+                    "1"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  ""
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  ""
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Report",
+          "item": [
+            {
+              "name": "user-dashboard-report",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/user-reports",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "user-reports"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "log-report",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/log-reports?days=5",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "log-reports"
+                  ],
+                  "query": [
+                    {
+                      "key": "days",
+                      "value": "5"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Overview",
+          "item": [
+            {
+              "name": "health-report",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            }
+          ],
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  ""
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "packages": {},
+                "requests": {},
+                "exec": [
+                  ""
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "all-user",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{indiv}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{url}}/users",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "CalendarSchedules",
+      "item": [
+        {
+          "name": "New Request",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        },
+        {
+          "name": "create-schedule",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{prof}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"client_id\": 3,\r\n    \"date\": \"2026-02-28\",\r\n    \"time\": \"10:00:00\",\r\n    \"check_in_type\": \"Upper Body Workout\",\r\n    \"private_note\": \"Focus on shoulder stability and form.\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/schedule-checkin",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "schedule-checkin"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "set-reminder",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{prof}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"client_id\": 4,\r\n    \"reminder_type\": \"motivation\",\r\n    \"message\": \"Keep up the great work! You are hitting your goals consistently.\",\r\n    \"in_app\": true,\r\n    \"push_notification\": true\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/send-reminder",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "send-reminder"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "get-remainder",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Habit",
+      "item": [
+        {
+          "name": "SleepLog",
+          "item": [
+            {
+              "name": "create-sleep-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \r\n    \"user_id\": 3, \r\n    \"weight\": 72, \r\n    \"daily_steps\": 8500, \r\n    \"sleep_hours\": 7.5, \r\n    \"water_glasses\": 8,\r\n    \"log_date\": \"2026-02-25 10:07:08\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/sleep",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "sleep"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-sleep-log",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            },
+            {
+              "name": "all-user-sleep-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/sleep-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "sleep-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "sleep-report",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "NutritionLog",
+          "item": [
+            {
+              "name": "create-update-nutrition-logs",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    //\"id\": 1, //for update\r\n    \"log_date\": \"2026-02-26\",\r\n    \"meal_balance\": \"high_protein\",\r\n    \"protein_servings\": 4,\r\n    \"vegetable_servings\": 4,\r\n    \"carb_quality\": \"Whole grain oats\",\r\n    \"fat_sources\": \"Avocado, Olive oil\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/nutrition-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "nutrition-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-all-nutrition-logs",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/nutrition-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "nutrition-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-nutrition-logs",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/nutrition-logs/1",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "nutrition-logs",
+                    "1"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/nutrition-logs/5",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "nutrition-logs",
+                    "5"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "nutrition-report",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/nutrition-report",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "nutrition-report"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "ActivityLog",
+          "item": [
+            {
+              "name": "create-activity-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    //\"id\": 3, //for update\r\n    \"log_date\": \"2026-03-01\",\r\n    \"weight\": 72,\r\n    \"daily_steps\": 8500,\r\n    \"sleep_hours\": 7.5,\r\n    \"water_glasses\": 10\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/activity-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "activity-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-activity-log",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            },
+            {
+              "name": "delete-activity-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/activity-logs/2",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "activity-logs",
+                    "2"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "all-activity-log",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": ""
+                },
+                "url": {
+                  "raw": "{{url}}/activity-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "activity-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "activity-log-report",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "StressLog",
+          "item": [
+            {
+              "name": "all-stress-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/stress-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "stress-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "create-update-stress-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"id\": 1,\r\n    \"log_date\": \"2026-02-26\",\r\n    \"stress_level\": 5,\r\n    \"mood\": \"happy\", //'motivated','normal', 'low','happy', 'sad', 'neutral', 'angry', 'anxious'\r\n    \"description\": \"Had a great day at work and finished all tasks.\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/stress-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "stress-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-stress-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/ecmascript",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/stress-logs/1",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "stress-logs",
+                    "1"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "New Request",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/stress-logs/2",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "stress-logs",
+                    "2"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "stress-report",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "HydrationLog",
+          "item": [
+            {
+              "name": "create-update-hydration-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{ \r\n    //\"id\": 4,\r\n    \"weight\": 74, \r\n    \"daily_steps\": 9500, \r\n    \"sleep_hours\": 9.5, \r\n    \"water_glasses\": 12,\r\n    \"log_date\": \"2026-03-03\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/hydration-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "hydration-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-hydration-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/hydration-logs/4",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "hydration-logs",
+                    "4"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "all-hydration-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/hydration-logs",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "hydration-logs"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete-hydration-log",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/hydration-logs/4",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "hydration-logs",
+                    "4"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "hydration-report",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/hydration-report",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "hydration-report"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AdminDashboard",
+      "item": [
+        {
+          "name": "Overview",
+          "item": [
+            {
+              "name": "admin-overview",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "User",
+          "item": [
+            {
+              "name": "user-list",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/users",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete-user",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/users/7",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users",
+                    "7"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "view-profile",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/admin/users/6",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "users",
+                    "6"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Plan",
+          "item": [
+            {
+              "name": "all-plans",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/plans?billing=annual",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "plans"
+                  ],
+                  "query": [
+                    {
+                      "key": "billing",
+                      "value": "annual"
+                    },
+                    {
+                      "key": "billing",
+                      "value": "monthly",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "update $ create using same route",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"id\": 9,                     // optional for update\r\n    \"name\": \"New Professional Plan\",\r\n    \"plan_type\": \"professional\",\r\n    \"billing_cycle\": \"monthly\",\r\n    \"price\": 600,\r\n    \"duration\": 30,\r\n    \"member_limit\": 10,\r\n    \"features\": [\"Feature 17\", \"Feature 2\"],\r\n    \"status\": true\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/plans/store-or-update",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "plans",
+                    "store-or-update"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-individual-plan",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/plans/2?billing=annual",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "plans",
+                    "2"
+                  ],
+                  "query": [
+                    {
+                      "key": "billing",
+                      "value": "annual"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete-plan",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/plans/2",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "plans",
+                    "2"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "active-deactive-plan",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "multipart/form-data",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "ads_title",
+                      "value": "Updated Winter Sale",
+                      "type": "text",
+                      "uuid": "23e40383-d1ee-4bfc-8871-82e978246f98"
+                    },
+                    {
+                      "key": "ads_type",
+                      "value": "Banner",
+                      "type": "text",
+                      "uuid": "ef6ebddc-361e-4b8d-9985-0b1b7b7d0c0e"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "uuid": "3531306a-68ae-4fc0-88f1-a46f75cfe210",
+                      "src": "/C:/Users/Betopia/Downloads/82f0211cfef1f4ade2ba3fb38b0901f5182dc01c.jpg"
+                    },
+                    {
+                      "key": "placement",
+                      "value": "Home Screen Top",
+                      "type": "text",
+                      "uuid": "5da3d792-8bcb-451a-976a-1da8ef714fb2"
+                    },
+                    {
+                      "key": "start_date",
+                      "value": "2026-03-01",
+                      "type": "text",
+                      "uuid": "23a049ed-43a4-41cc-8f4c-df996807d516"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-03-30",
+                      "type": "text",
+                      "uuid": "c4fd22a6-75e4-496a-b8fb-257b472f58cf"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{url}}/plans/toggle-status/1",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "plans",
+                    "toggle-status",
+                    "1"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Reports",
+          "item": [
+            {
+              "name": "genrate-report",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/admin/reports",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "admin",
+                    "reports"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "AdsManager",
+          "item": [
+            {
+              "name": "all-active-ads",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/ads",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "ads"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "create-update-ads",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "multipart/form-data",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "ads_title",
+                      "value": "Updated Winter Sale",
+                      "type": "text",
+                      "uuid": "23e40383-d1ee-4bfc-8871-82e978246f98"
+                    },
+                    {
+                      "key": "ads_type",
+                      "value": "Banner",
+                      "type": "text",
+                      "uuid": "ef6ebddc-361e-4b8d-9985-0b1b7b7d0c0e"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "uuid": "3531306a-68ae-4fc0-88f1-a46f75cfe210",
+                      "src": "/C:/Users/Betopia/Downloads/82f0211cfef1f4ade2ba3fb38b0901f5182dc01c.jpg"
+                    },
+                    {
+                      "key": "placement",
+                      "value": "Home Screen Top",
+                      "type": "text",
+                      "uuid": "5da3d792-8bcb-451a-976a-1da8ef714fb2"
+                    },
+                    {
+                      "key": "start_date",
+                      "value": "2026-03-01",
+                      "type": "text",
+                      "uuid": "23a049ed-43a4-41cc-8f4c-df996807d516"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-03-30",
+                      "type": "text",
+                      "uuid": "c4fd22a6-75e4-496a-b8fb-257b472f58cf"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{url}}/ads",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "ads"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete-ads",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": []
+                },
+                "url": {
+                  "raw": "{{url}}/ads/3",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "ads",
+                    "3"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "admin-daashboard-all-ads",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            },
+            {
+              "name": "active-inactive-ads",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{admin}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Accept",
+                    "value": "multipart/form-data",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "ads_title",
+                      "value": "Updated Winter Sale",
+                      "type": "text",
+                      "uuid": "23e40383-d1ee-4bfc-8871-82e978246f98"
+                    },
+                    {
+                      "key": "ads_type",
+                      "value": "Banner",
+                      "type": "text",
+                      "uuid": "ef6ebddc-361e-4b8d-9985-0b1b7b7d0c0e"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "uuid": "3531306a-68ae-4fc0-88f1-a46f75cfe210",
+                      "src": "/C:/Users/Betopia/Downloads/82f0211cfef1f4ade2ba3fb38b0901f5182dc01c.jpg"
+                    },
+                    {
+                      "key": "placement",
+                      "value": "Home Screen Top",
+                      "type": "text",
+                      "uuid": "5da3d792-8bcb-451a-976a-1da8ef714fb2"
+                    },
+                    {
+                      "key": "start_date",
+                      "value": "2026-03-01",
+                      "type": "text",
+                      "uuid": "23a049ed-43a4-41cc-8f4c-df996807d516"
+                    },
+                    {
+                      "key": "end_date",
+                      "value": "2026-03-30",
+                      "type": "text",
+                      "uuid": "c4fd22a6-75e4-496a-b8fb-257b472f58cf"
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{url}}/ads/toggle-status/1",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "ads",
+                    "toggle-status",
+                    "1"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Message",
+      "item": [
+        {
+          "name": "send-message",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{indiv}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"receiver_id\": 1, \r\n    \"message\": \"Hello Coch hjhgj!!!\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/messages/send",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "messages",
+                "send"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "New Request",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        },
+        {
+          "name": "New Request",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Faq",
+      "item": [
+        {
+          "name": "all-faq",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/faqs",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "faqs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "create-faq",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    //\"id\": 1, //for update\r\n    \"question\": \"This is test question\",\r\n    \"answer\": \"This is test answare\",\r\n    \"is_active\": false\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/faqs",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "faqs"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "delete-faq",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"question\": \"This is test question\",\r\n    \"answer\": \"This is test answare\",\r\n    \"is_active\": true\r\n}"
+            },
+            "url": {
+              "raw": "{{url}}/faqs/2",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "faqs",
+                "2"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "faq-admin-dashboard",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{admin}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{url}}/admin/faqs",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "admin",
+                "faqs"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Projection",
+      "item": [
+        {
+          "name": "New Request",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notification",
+      "item": [
+        {
+          "name": "New Request",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n    \"enable_coach_messages\": true,\r\n    \"enable_goal_updates\": false,\r\n    \"reminder_time\": \"10:00 AM\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/user/notification-settings",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "user",
+                "notification-settings"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Program",
+      "item": [
+        {
+          "name": "New Request",
+          "request": {
+            "method": "GET",
+            "header": []
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Trainer",
+      "item": [
+        {
+          "name": "TargetGolal",
+          "item": [
+            {
+              "name": "New Request",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{indiv}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/goals",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "goals"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "New Request",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{prof}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"user_id\": 3,\r\n    \"target_weight\": 75.50,\r\n    \"weekly_workout_goal\": 5,\r\n    \"daily_step_goal\": 10000,\r\n    \"sleep_target\": 8.5,\r\n    \"start_date\": \"2026-03-01\",\r\n    \"end_date\": \"2026-06-01\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/goals",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "goals"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "AdjustProgram",
+          "item": [
+            {
+              "name": "create-adjust-program-for-usr",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{prof}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"user_id\": 3,\r\n    \"target_weight\": 80,\r\n    \"weekly_workouts\": \"4 Days\",\r\n    \"sleep_target_range\": \"7-8 hours\",\r\n    \"hydration_target\": 3.5,\r\n    \"show_program_goals\": true,\r\n    \"show_personal_targets\": true,\r\n    \"show_progress_graphs\": true,\r\n    \"show_ai_insights\": false,\r\n    \"primary_focus_area\": \"Muscle Gain\",\r\n    \"note\": \"Focus on heavy lifting this week.\",\r\n    \"programs\": \"Hypertrophy Phase 1\"\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/adjust-program",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "adjust-program"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-program-user",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Program",
+          "item": [
+            {
+              "name": "add-program",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n  \"name\": \"Beginner Fitness good Plan\",\r\n  \"duration\": 30,\r\n  \"primary_goal\": \"Weight Loss\",//Fat loss,Habit consistency,Daily movement\r\n  \"target_intensity\": \"Moderate\",\r\n  \"habit_focus_areas\": [\"Sleep\", \"Hydration\", \"Steps\"],\r\n  \"program_focus\": [\"Cardio\", \"Strength Training\"],\r\n  \"focus_areas\": [\"Arms\", \"Legs\", \"Core\"],\r\n  \"habit_focus\": [\"Daily Walk\", \"Drink Water\"],\r\n  \"calories\": 2000,\r\n  \"protein\": 150,\r\n  \"carbs\": 250,\r\n  \"fat\": 50,\r\n  \"supplement_recommendation\": [\"Vitamin D\", \"Protein Powder\"],\r\n  \"supplement\": [\"Whey Protein\"]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/program-sets",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "program-sets"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "show-all",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": ""
+                },
+                "url": {
+                  "raw": "{{url}}/program-sets",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "program-sets"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "single-program",
+              "protocolProfileBehavior": {
+                "disableBodyPruning": true
+              },
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": ""
+                },
+                "url": {
+                  "raw": "{{url}}/program-sets/1",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "program-sets",
+                    "1"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "update",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "url": {
+                  "raw": "{{url}}/program-sets",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "program-sets"
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "delete",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "DELETE",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "",
+                    "value": "",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/program-sets/1",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "program-sets",
+                    "1"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Assign-member",
+          "item": [
+            {
+              "name": "all-individual-list",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "url": {
+                  "raw": "{{url}}/users/individuals",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "users",
+                    "individuals"
+                  ],
+                  "query": [
+                    {
+                      "key": "email",
+                      "value": "individual@example.com",
+                      "disabled": true
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "assign to client",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{token}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\r\n    \"program_set_id\": 2,\r\n    \"user_ids\": [3]\r\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{url}}/program-sets/assign-users",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "program-sets",
+                    "assign-users"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "AI-obseration",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/ai-observemetrics",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "ai-observemetrics"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "health & habit overviewdashboard-metrics",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{url}}/dashboard-metrics",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "dashboard-metrics"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Supplier",
+      "item": [
+        {
+          "name": "Product",
+          "item": [
+            {
+              "name": "create-product",
+              "request": {
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{prof}}",
+                      "type": "string"
+                    }
+                  ]
+                },
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Accept",
+                    "value": "application/json",
+                    "type": "text"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json",
+                    "type": "text"
+                  }
+                ],
+                "body": {
+                  "mode": "formdata",
+                  "formdata": [
+                    {
+                      "key": "name",
+                      "value": "Protein Shake",
+                      "type": "text",
+                      "uuid": "a7fe9c04-db65-4775-aa6d-471fdc158afc"
+                    },
+                    {
+                      "key": "description",
+                      "value": "High quality whey protein",
+                      "type": "text",
+                      "uuid": "7216c95b-32a5-4582-bc85-d17525c83972"
+                    },
+                    {
+                      "key": "category",
+                      "value": "supplements",
+                      "type": "text",
+                      "uuid": "4ccba972-9650-4921-bb23-bdc1444f33e1"
+                    },
+                    {
+                      "key": "price",
+                      "value": "45.99",
+                      "type": "text",
+                      "uuid": "ea4f481d-39bd-4533-b29d-969ebe721bfe"
+                    },
+                    {
+                      "key": "redirect_url",
+                      "value": "https://shop.com/product1",
+                      "type": "text",
+                      "uuid": "81508c44-bd18-4efb-9286-f562d02c348e"
+                    },
+                    {
+                      "key": "status",
+                      "value": "published",
+                      "type": "text",
+                      "uuid": "f39dc9f9-8383-4f26-9115-d16bce8e8dbb"
+                    },
+                    {
+                      "key": "image",
+                      "type": "file",
+                      "uuid": "06675703-63fd-44a7-a106-2be5507a8a7e",
+                      "value": null
+                    }
+                  ]
+                },
+                "url": {
+                  "raw": "{{url}}/products",
+                  "host": [
+                    "{{url}}"
+                  ],
+                  "path": [
+                    "products"
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "contact-specialist in pricing",
+      "item": [
+        {
+          "name": "contact",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"email\": \"soyiveb525@creteanu.com\",\r\n  \"message\": \"Hello admin, I need help with my account.\"\r\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/contact",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "contact"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Stripe-Payment system",
+      "item": [
+        {
+          "name": "add-payment",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\r\n  \"plan_id\": 3,\r\n  \"billing\": \"annual\" //annual,monthly\r\n}\r\n// {\r\n//   \"plan_id\": 2,\r\n//   \"billing\": \"monthly\"\r\n// }",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/payment/process",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "payment",
+                "process"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "show-all",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{url}}/all-payments",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "all-payments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "single-order-show",
+          "protocolProfileBehavior": {
+            "disableBodyPruning": true
+          },
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": ""
+            },
+            "url": {
+              "raw": "{{url}}/payment/show",
+              "host": [
+                "{{url}}"
+              ],
+              "path": [
+                "payment",
+                "show"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "packages": {},
+        "requests": {},
+        "exec": [
+          ""
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "url",
+      "value": ""
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "prof",
+      "value": ""
+    },
+    {
+      "key": "indiv",
+      "value": ""
+    },
+    {
+      "key": "coach",
+      "value": ""
+    }
+  ]
+}
