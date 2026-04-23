@@ -26,8 +26,8 @@ echo "MySQL is up - continuing..."
 # Create .env file if it doesn't exist
 # Copies the example configuration to key the environment variables
 if [ ! -f .env ]; then
-    echo "Creating .env file from .env.docker..."
-    cp .env.docker .env
+    echo "Creating .env file from .env.example..."
+    cp .env.example .env
 fi
 
 # Generate application key if not set
