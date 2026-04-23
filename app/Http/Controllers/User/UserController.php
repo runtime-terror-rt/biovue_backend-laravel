@@ -1017,7 +1017,19 @@ private function formatFoods($foods)
                 return response()->json(['success' => false, 'message' => "You can't connect to yourself"], 400);
             }
 
+            $creditRecord = ProjectionCredit::where('user_id', $professionId)->first();
+
+            if (!$creditRecord) {
+                return response()->json(['success' => false, 'message' => 'Professional configuration not found.'], 404);
+            }
+
+            if ($creditRecord->member_limit <= 0) {
+                return response()->json(['success' => false, 'message' => 'This professional has reached their maximum member limit.'], 400);
+            }
+
             $user->myProfessionals()->syncWithoutDetaching([$professionId]);
+
+            $creditRecord->decrement('member_limit');
 
             $connectedUser = User::with('profile')->find($professionId);
 
@@ -1025,19 +1037,11 @@ private function formatFoods($foods)
                 'success' => true,
                 'message' => 'Successfully connected to the professional',
                 'data' => [
-                    'connection_details' => [
-                        'connected_at' => now()->format('Y-m-d H:i:s'),
-                        'status'       => 'active'
-                    ],
+                    'connection_details' => ['connected_at' => now()->format('Y-m-d H:i:s'), 'status' => 'active'],
                     'professional_info' => [
-                        'id'            => $connectedUser->id,
-                        'name'          => $connectedUser->name,
-                        'email'         => $connectedUser->email,
-                        'user_type'     => $connectedUser->user_type,
-                        'bio'           => $connectedUser->profile?->bio ?? null,
-                        'profile_image' => $connectedUser->profile?->image 
-                                        ? asset('storage/' . $connectedUser->profile->image) 
-                                        : null,
+                        'id' => $connectedUser->id,
+                        'name' => $connectedUser->name,
+                        'user_type' => $connectedUser->user_type,
                     ]
                 ]
             ], 200);
@@ -1045,7 +1049,18 @@ private function formatFoods($foods)
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
-    }   
+    }
+
+    private function isCapacityReached($professionalId)
+    {
+        $limit = ProjectionCredit::where('user_id', $professionalId)->value('member_limit') ?? 0;
+
+        $currentConnections = DB::table('connect_user_proffesions')
+                                ->where('profession_id', $professionalId)
+                                ->count();
+
+        return $currentConnections >= $limit;
+    }
 
     public function getMyConnections(Request $request)
     {

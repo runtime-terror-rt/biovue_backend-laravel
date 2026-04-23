@@ -22,7 +22,7 @@ class DashboardController extends Controller
 
             $stats = [
                 'total_signups'       => User::count(),
-                'active_users'        => User::where('status', true)->count(),
+                'active_users'        => User::where('is_active', true)->count(),
                 'total_subscriptions' => DB::table('plan_payments')->where('status', 'paid')->count(),
                 'total_revenue'       => '$' . number_format(DB::table('plan_payments')->where('status', 'paid')->sum('amount'), 2),
                 'monthly_revenue'     => '$' . number_format(DB::table('plan_payments')->where('status', 'paid')->whereMonth('created_at', now()->month)->sum('amount'), 2),

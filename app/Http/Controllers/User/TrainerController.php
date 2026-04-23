@@ -231,6 +231,11 @@ class TrainerController extends Controller
         ]);
 
         $trainer = auth()->user();
+
+        if ($this->isCapacityReached($trainer->id)) {
+            return response()->json(['success' => false, 'message' => 'You have reached your maximum member limit and cannot send new invitations.'], 400);
+        }
+
         $token = \Illuminate\Support\Str::random(40);
 
         $invitation = Invitation::create([
@@ -246,32 +251,51 @@ class TrainerController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Invitation sent successfully!',
-            'token' => $token, 
         ]);
     }
+
+    private function isCapacityReached($professionalId)
+    {
+        $limit = ProjectionCredit::where('user_id', $professionalId)->value('member_limit') ?? 0;
+
+        $currentConnections = \DB::table('connect_user_proffesions')
+                                ->where('profession_id', $professionalId)
+                                ->count();
+
+        return $currentConnections >= $limit;
+    }
+
     public function acceptInvitation($token)
     {
-        $invitation = \App\Models\Invitation::where('token', $token)
+        $invitation = Invitation::where('token', $token)
             ->where('status', 'pending')
             ->firstOrFail();
 
-        $user = \App\Models\User::where('email', $invitation->email)->first();
+        $trainerCredit = ProjectionCredit::where('user_id', $invitation->trainer_id)->first();
 
-        if ($user) {
-            \Illuminate\Support\Facades\DB::table('connect_user_proffesions')->updateOrInsert([
-                'profession_id' => $invitation->trainer_id,
-                'user_id'       => $user->id,
-            ], [
-                'created_at' => now(),
-                'updated_at' => now()
-            ]);
-
-            $invitation->update(['status' => 'accepted']);
-
-            return redirect()->to('https://biovuedigitalwellness.com/user-dashboard');
+        if (!$trainerCredit || $trainerCredit->member_limit <= 0) {
+            return redirect()->to('https://biovuedigitalwellness.com/error?msg=capacity_reached');
         }
 
-        return redirect()->to('https://biovuedigitalwellness.com/register?email=' . $invitation->email);
+        $user = auth()->user();
+
+        if (!$user || $user->email !== $invitation->email) {
+            return redirect()->to('https://biovuedigitalwellness.com/register?email=' . $invitation->email);
+        }
+
+        \Illuminate\Support\Facades\DB::table('connect_user_proffesions')->updateOrInsert([
+            'profession_id' => $invitation->trainer_id,
+            'user_id'       => $user->id,
+        ], [
+            'created_at' => now(),
+            'updated_at' => now()
+        ]);
+
+        $invitation->update(['status' => 'accepted']);
+
+        $trainerCredit->decrement('member_limit');
+
+        return redirect()->to('https://biovuedigitalwellness.com/user-dashboard');
     }
 
     public function giftCredit(Request $request)
