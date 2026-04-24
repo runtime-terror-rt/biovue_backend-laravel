@@ -46,6 +46,7 @@ class AdsController extends Controller
             'ads_type'   => 'nullable|string',
             'image'      => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
             'placement'  => 'nullable|string',
+            'redirect_url' => 'nullable|url',
             'start_date' => 'nullable|date',
             'end_date'   => 'nullable|date|after_or_equal:start_date',
             'status'    => 'nullable|boolean'
