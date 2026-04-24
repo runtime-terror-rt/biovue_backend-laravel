@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 class AdsSetting extends Model
 {
     protected $fillable = [
-        'ads_title', 'ads_type', 'image', 'placement', 'start_date', 'end_date'
+        'ads_title', 'ads_type', 'image', 'placement', 'redirect_url', 'start_date', 'end_date'
     ];
 
     protected function image(): Attribute

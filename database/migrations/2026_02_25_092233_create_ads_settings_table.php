@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('ads_type')->nullable(); 
             $table->string('image')->nullable(); 
             $table->string('placement')->nullable(); 
+            $table->string('redirect_url')->nullable();
             $table->date('start_date')->nullable(); 
             $table->date('end_date')->nullable();
             $table->boolean('status')->default(false);
