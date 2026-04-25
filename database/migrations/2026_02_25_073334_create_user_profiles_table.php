@@ -20,7 +20,7 @@ return new class extends Migration
             $table->string('sex', 20)->nullable(); 
             $table->decimal('height', 10, 2)->nullable(); 
             $table->decimal('weight', 10, 2)->nullable();
-            $table->enum('unit', ['metric', 'imperial'])->default('imperial');
+            $table->string('unit')->default('imperial');
             $table->string('body_fat', 20)->nullable(); 
             $table->string('location')->nullable(); 
             $table->string('zipcode', 20)->nullable();
