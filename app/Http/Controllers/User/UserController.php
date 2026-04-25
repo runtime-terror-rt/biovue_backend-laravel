@@ -140,13 +140,13 @@ class UserController extends Controller
     {
         try {
             $id = $userId ?: auth()->id();
-            
             $user = User::with(['profile', 'targetGoals', 'adjustProgram'])->find($id);
+
             if (!$user) {
                 return response()->json(['success' => false, 'message' => 'User not found'], 404);
             }
 
-            $unit = $user->profile->unit ?? 'imperial'; // 'metric' or 'imperial'
+            $unit = $user->profile->unit ?? 'imperial'; // 'metric' বা 'imperial'
             $startOfWeek = now()->startOfWeek()->toDateString();
             $endOfWeek = now()->today()->toDateString();
 
@@ -167,28 +167,21 @@ class UserController extends Controller
 
             $rawWeight = $activityLogs->whereNotNull('weight')->last()->weight ?? ($user->profile->weight ?? 0);
             $rawTarget = $user->targetGoals->target_weight ?? 0;
-            $height = $user->profile->height ?? 0; // In CM
+            $heightCm = $user->profile->height ?? 0;
 
-            if ($unit === 'imperial') {
-                $displayWeight = round($rawWeight * 2.20462, 1); // KG to LBS
-                $displayTarget = round($rawTarget * 2.20462, 1); // KG to LBS
-                $unitLabel = 'lbs';
-            } else {
-                $displayWeight = $rawWeight;
-                $displayTarget = $rawTarget;
-                $unitLabel = 'kg';
-            }
-
+            $weightInKgForCalculation = ($unit === 'imperial') ? ($rawWeight / 2.20462) : $rawWeight;
+            
+            $displayWeight = round($rawWeight, 1);
+            $displayTarget = round($rawTarget, 1);
+            $unitLabel = ($unit === 'imperial') ? 'lbs' : 'kg';
             $weightDiff = round($displayWeight - $displayTarget, 1);
 
-            //  BMI Calculation (Standard Metric Internal)
             $bmi = 0;
-            if ($height > 0 && $rawWeight > 0) {
-                $heightInMeters = $height / 100;
-                $bmi = round($rawWeight / ($heightInMeters * $heightInMeters), 1);
+            if ($heightCm > 0 && $weightInKgForCalculation > 0) {
+                $heightInMeters = $heightCm / 100;
+                $bmi = round($weightInKgForCalculation / ($heightInMeters * $heightInMeters), 1);
             }
 
-            //  Final JSON Response
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -198,7 +191,6 @@ class UserController extends Controller
                         'data_logged_entries' => $activityLogs->count() + $nutritionLogs->count() + $stressLogs->count(),
                         'unit_system' => $unit
                     ],
-
                     'health_overview' => [
                         'weight' => [
                             'current' => $displayWeight . ' ' . $unitLabel,
@@ -232,7 +224,6 @@ class UserController extends Controller
                             'avg_stress_level' => round($stressLogs->avg('stress_level') ?? 0, 1)
                         ]
                     ],
-
                     'settings' => [
                         'show_graphs' => (bool) ($user->adjustProgram->show_progress_graphs ?? true),
                         'show_ai' => (bool) ($user->adjustProgram->show_ai_insights ?? true)
