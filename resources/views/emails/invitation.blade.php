@@ -73,36 +73,29 @@
                 Connect with your trainer to start tracking your journey and achieving your goals.
             </p>
 
-            <div style="background-color: #f0f7ff; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left;">
-                <h3 style="margin-top: 0; color: #0056b3;">AI Analysis & Plan</h3>
-                <p style="font-size: 15px; color: #444; line-height: 1.5;">
-                    {{ $details['match_reason'] }}
-                </p>
+            @if(!empty($details['match_reason']) || !empty($details['recommended_actions']))
+                <div style="background-color: #f0f7ff; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left;">
+                    
+                    @if(!empty($details['match_reason']))
+                        <h3 style="margin-top: 0; color: #0056b3;">AI Analysis & Plan</h3>
+                        <p style="font-size: 15px; color: #444; line-height: 1.5;">
+                            {{ $details['match_reason'] }}
+                        </p>
+                    @endif
 
-                <h4 style="color: #333;">Recommended Actions:</h4>
-                <ul style="color: #555; padding-left: 20px;">
-                    @foreach($details['recommended_actions'] as $action)
-                        <li style="margin-bottom: 5px;">{{ $action }}</li>
-                    @endforeach
-                </ul>
-            </div>
+                    @if(!empty($details['recommended_actions']) && is_array($details['recommended_actions']))
+                        <h4 style="color: #333;">Recommended Actions:</h4>
+                        <ul style="color: #555; padding-left: 20px;">
+                            @foreach($details['recommended_actions'] as $action)
+                                <li style="margin-bottom: 5px;">{{ $action }}</li>
+                            @endforeach
+                        </ul>
+                    @endif
+                </div>
+            @endif
 
             <a href="{{ $url }}" class="btn">Accept Invitation</a>
 
-            <p class="ignore-text">
-                If you did not expect this invitation, you can safely ignore this email.
-            </p>
-
-            <hr>
-
-            <p style="color: #333; font-size: 15px;">
-                Regards,<br>
-                <strong>BioVue Digital Wellness Team</strong>
-            </p>
-        </div>
-        
-        <div class="footer">
-            &copy; {{ date('Y') }} BioVue Digital Wellness. All rights reserved.
         </div>
     </div>
 </body>
