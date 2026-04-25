@@ -146,41 +146,31 @@ class UserController extends Controller
                 return response()->json(['success' => false, 'message' => 'User not found'], 404);
             }
 
-            $unit = $user->profile->unit ?? 'imperial'; // 'metric' বা 'imperial'
+            $unit = $user->profile->unit ?? 'imperial'; 
+            
             $startOfWeek = now()->startOfWeek()->toDateString();
             $endOfWeek = now()->today()->toDateString();
 
-            $activityLogs = DB::table('activity_logs')
-                ->where('user_id', $id)
-                ->whereBetween('log_date', [$startOfWeek, $endOfWeek])
-                ->get();
-                
-            $nutritionLogs = DB::table('nutrition_logs')
-                ->where('user_id', $id)
-                ->whereBetween('log_date', [$startOfWeek, $endOfWeek])
-                ->get();
-                
-            $stressLogs = DB::table('stress_logs')
-                ->where('user_id', $id)
-                ->whereBetween('log_date', [$startOfWeek, $endOfWeek])
-                ->get();
+            $activityLogs = DB::table('activity_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $nutritionLogs = DB::table('nutrition_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $stressLogs = DB::table('stress_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
 
             $rawWeight = $activityLogs->whereNotNull('weight')->last()->weight ?? ($user->profile->weight ?? 0);
+            $rawHeight = $user->profile->height ?? 0;
             $rawTarget = $user->targetGoals->target_weight ?? 0;
-            $heightCm = $user->profile->height ?? 0;
 
-            $weightInKgForCalculation = ($unit === 'imperial') ? ($rawWeight / 2.20462) : $rawWeight;
-            
+            $calcWeight = ($unit === 'imperial') ? ($rawWeight / 2.20462) : $rawWeight;
+            $calcHeightMeters = ($unit === 'imperial') ? ($rawHeight * 0.0254) : ($rawHeight / 100);
+
+            $bmi = 0;
+            if ($calcHeightMeters > 0 && $calcWeight > 0) {
+                $bmi = round($calcWeight / ($calcHeightMeters * $calcHeightMeters), 1);
+            }
+
             $displayWeight = round($rawWeight, 1);
             $displayTarget = round($rawTarget, 1);
             $unitLabel = ($unit === 'imperial') ? 'lbs' : 'kg';
-            $weightDiff = round($displayWeight - $displayTarget, 1);
-
-            $bmi = 0;
-            if ($heightCm > 0 && $weightInKgForCalculation > 0) {
-                $heightInMeters = $heightCm / 100;
-                $bmi = round($weightInKgForCalculation / ($heightInMeters * $heightInMeters), 1);
-            }
+            $weightDiff = round($rawWeight - $rawTarget, 1);
 
             return response()->json([
                 'success' => true,
@@ -239,6 +229,7 @@ class UserController extends Controller
             ], 500);
         }
     }
+
     /**
      * Helper to determine BMI Status
      */
