@@ -12,16 +12,16 @@ class InvitationMail extends Mailable
 
     public $trainer;
     public $token;
-
+    public $details;
     /**
      * Create a new message instance.
      */
-    public function __construct($trainer, $token)
+    public function __construct($trainer, $token, $details)
     {
         $this->trainer = $trainer;
         $this->token = $token;
+        $this->details = $details;
     }
-
     /**
      * Build the message.
      */
@@ -32,6 +32,7 @@ class InvitationMail extends Mailable
             ->with([
                 'trainerName' => $this->trainer->name,
                 'url' => url('/api/v1/invitation/accept/' . $this->token), 
+                'details' => $this->details, 
             ]);
     }
 }

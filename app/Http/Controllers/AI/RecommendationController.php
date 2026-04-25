@@ -45,36 +45,40 @@ class RecommendationController extends Controller
 
 
     /**
- * Get user suggestions for a trainer
- */
-public function trainerUsers($trainer_id)
-{
-    try {
+     * Get user suggestions for a trainer
+     */
+    public function trainerUsers() 
+    {
+        try {
+            $trainerId = auth()->id();
 
-        $response = Http::timeout(120)
-            ->withoutVerifying() // SSL verify ignore
-            ->get("https://ai.biovuedigitalwellness.com/api/v1/recommend/users/trainer/{$trainer_id}");
+            if (!$trainerId) {
+                return response()->json(['message' => 'Unauthorized: No user found'], 401);
+            }
 
-        if ($response->failed()) {
+            $response = Http::timeout(120)
+                ->withoutVerifying() // SSL verify ignore
+                ->get("https://ai.biovuedigitalwellness.com/api/v1/recommend/users/trainer/{$trainerId}/saved/");
+
+            if ($response->failed()) {
+                return response()->json([
+                    'message' => 'Trainer recommendation API failed',
+                    'error' => $response->body()
+                ], 500);
+            }
+
             return response()->json([
-                'message' => 'Trainer recommendation API failed',
-                'error' => $response->body()
+                'message' => 'Trainer user suggestions retrieved successfully',
+                'data' => $response->json()
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Something went wrong',
+                'error' => $e->getMessage()
             ], 500);
         }
-
-        return response()->json([
-            'message' => 'Trainer user suggestions retrieved successfully',
-            'data' => $response->json()
-        ], 200);
-
-    } catch (\Exception $e) {
-
-        return response()->json([
-            'message' => 'Something went wrong',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
 
 

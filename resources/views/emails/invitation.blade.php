@@ -73,6 +73,20 @@
                 Connect with your trainer to start tracking your journey and achieving your goals.
             </p>
 
+            <div style="background-color: #f0f7ff; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left;">
+                <h3 style="margin-top: 0; color: #0056b3;">AI Analysis & Plan</h3>
+                <p style="font-size: 15px; color: #444; line-height: 1.5;">
+                    {{ $details['match_reason'] }}
+                </p>
+
+                <h4 style="color: #333;">Recommended Actions:</h4>
+                <ul style="color: #555; padding-left: 20px;">
+                    @foreach($details['recommended_actions'] as $action)
+                        <li style="margin-bottom: 5px;">{{ $action }}</li>
+                    @endforeach
+                </ul>
+            </div>
+
             <a href="{{ $url }}" class="btn">Accept Invitation</a>
 
             <p class="ignore-text">

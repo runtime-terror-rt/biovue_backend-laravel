@@ -228,17 +228,24 @@ class TrainerController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
+            'match_reason' => 'required|string',
+            'recommended_actions' => 'required|array',
         ]);
 
         $trainer = auth()->user();
 
         if ($this->isCapacityReached($trainer->id)) {
-            return response()->json(['success' => false, 'message' => 'You have reached your maximum member limit and cannot send new invitations.'], 400);
+            return response()->json(['success' => false, 'message' => 'Capacity reached'], 400);
         }
 
         $token = \Illuminate\Support\Str::random(40);
 
-        $invitation = Invitation::create([
+        $details = [
+            'match_reason' => $request->match_reason,
+            'recommended_actions' => $request->recommended_actions
+        ];
+
+        Invitation::create([
             'trainer_id' => $trainer->id, 
             'email'      => $request->email,
             'token'      => $token,
@@ -246,7 +253,7 @@ class TrainerController extends Controller
         ]);
 
         \Illuminate\Support\Facades\Mail::to($request->email)
-            ->send(new \App\Mail\InvitationMail($trainer, $token));
+            ->send(new \App\Mail\InvitationMail($trainer, $token, $details));
 
         return response()->json([
             'success' => true,
