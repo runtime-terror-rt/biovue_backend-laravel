@@ -228,7 +228,7 @@ class TrainerController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
-            'match_reason' => 'required|nullable',
+            'match_reason' => 'nullable',
             'recommended_actions' => 'nullable|array',
         ]);
 
