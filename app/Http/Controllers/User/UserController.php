@@ -152,6 +152,8 @@ class UserController extends Controller
             $endOfWeek = now()->today()->toDateString();
 
             $activityLogs = DB::table('activity_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $hydrationLogs = DB::table('hydration_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $sleepLog   = DB::table('sleep_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
             $nutritionLogs = DB::table('nutrition_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
             $stressLogs = DB::table('stress_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
 
@@ -202,11 +204,11 @@ class UserController extends Controller
                             'coach_plan' => number_format($user->targetGoals->daily_step_goal ?? 0) . ' steps'
                         ],
                         'sleep_hours' => [
-                            'current' => round($activityLogs->avg('sleep_hours') ?? 0, 1) . ' Hrs',
+                            'current' => round($sleepLog->avg('sleep_hours') ?? 0, 1) . ' Hrs',
                             'coach_plan' => ($user->targetGoals->sleep_target ?? 'N/A') . ' Hrs'
                         ],
                         'hydration' => [
-                            'current_glasses' => $activityLogs->sum('water_glasses'),
+                            'current_glasses' => $hydrationLogs->sum('water_glasses'),
                             'target' => ($user->targetGoals->water_target ?? 'N/A') . ' glasses'
                         ],
                         'stress_and_mood' => [
