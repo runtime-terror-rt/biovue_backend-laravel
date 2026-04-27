@@ -34,7 +34,7 @@ class TargetGoalController extends Controller
             'sleep_target'        => 'nullable|numeric|between:0,24',
             'start_date'          => 'nullable|date',
             'end_date'            => 'nullable|date|after_or_equal:start_date',
-            'water_target'        => 'nullable|integer|min:0|max:20',
+            'water_target'        => 'nullable|integer',
             'supplement_recommendation' => 'nullable|array',
         ]);
 

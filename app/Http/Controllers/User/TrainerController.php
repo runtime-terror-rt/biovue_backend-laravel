@@ -285,7 +285,6 @@ class TrainerController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to send invitation.'], 500);
         }
     }
-
     private function isCapacityReached($professionalId)
     {
         $limit = ProjectionCredit::where('user_id', $professionalId)->value('member_limit') ?? 0;
@@ -308,9 +307,13 @@ class TrainerController extends Controller
         }
 
         $user->update([
-            'status' => 'active',
+            'status' => 'active', 
+            'terms_accepted' => 1, 
+            'user_type' => 'individual',
             'email_verified_at' => now()
         ]);
+
+        $user->syncRoles(['individual']); 
 
         \Illuminate\Support\Facades\DB::table('connect_user_proffesions')->updateOrInsert(
             ['profession_id' => $invitation->trainer_id, 'user_id' => $user->id],
@@ -318,6 +321,7 @@ class TrainerController extends Controller
         );
 
         $invitation->update(['status' => 'accepted']);
+        
         ProjectionCredit::where('user_id', $invitation->trainer_id)->decrement('member_limit');
 
         return redirect()->to('https://biovuedigitalwellness.com/login?message=Account+activated+successfully');
