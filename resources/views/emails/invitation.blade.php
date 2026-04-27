@@ -72,11 +72,12 @@
                 <strong>{{ $trainerName }}</strong> has invited you to join their wellness program on <strong>BioVue</strong>. 
                 Connect with your trainer to start tracking your journey and achieving your goals.
             </p>
-            @if(empty($details['match_reason']) || !empty($details['recommended_actions']))
+            @if(empty($details['match_reason']) && empty($details['recommended_actions']))
                 <p>Your account has been created. Here is your temporary login credentials:</p>
                 <p><strong>Email:</strong> {{ $email }}</p>
                 <p><strong>Password:</strong> {{ $plainPassword }}</p>
             @endif
+
             @if(!empty($details['match_reason']) || !empty($details['recommended_actions']))
                 <div style="background-color: #f0f7ff; padding: 20px; border-radius: 8px; margin: 20px 0; text-align: left;">
                     
