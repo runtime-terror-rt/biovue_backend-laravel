@@ -908,18 +908,13 @@ private function formatFoods($foods)
 
             $activeCount = $coach->myClients()->count();
 
-            $clientsQuery = $coach->myClients();
-
-            $attentionCount = (clone $clientsQuery)->whereDoesntHave('activityLogs', function($q) {
-                $q->where('log_date', '>=', now()->subDays(2)->toDateString());
-            })->count();
-
-            $clientsTable = $clientsQuery->with([
-                    'targetGoals', 
+            $clientsTable = $coach->myClients()
+                ->with([
+                    'targetGoals',
                     'activityLogs' => fn($q) => $q->latest('log_date'),
-                    'projectionCredits' 
+                    'projectionCredits'
                 ])
-                ->withCount('projections') 
+                ->withCount('projections')
                 ->get()
                 ->map(function($user) {
                     $latestLog = $user->activityLogs->first();
@@ -927,20 +922,21 @@ private function formatFoods($foods)
                     
                     $diff = $lastLogDate ? now()->startOfDay()->diffInDays($lastLogDate->startOfDay()) : null;
 
-                    $goalData = $user->targetGoals?->first();
+                    $goalData = $user->targetGoals; 
                     $used = $user->projections_count ?? 0;
                     $limit = $user->projectionCredits->projection_limit ?? 0;
-                    $projectionText = "{$used}/{$limit}";
-
+                    
                     return [
                         'user_id'         => $user->id,
                         'user_name'       => $user->name,
                         'goal'            => $goalData ? ($goalData->target_weight . " lbs Target") : 'General wellness',
-                        'projection_used' => $projectionText, 
+                        'projection_used' => "{$used}/{$limit}", 
                         'status'          => ($diff === null || $diff >= 3) ? 'Need attention' : 'On track',
                         'activity'        => $this->resolveActivityText($diff, $lastLogDate),
                     ];
                 });
+
+            $attentionCount = $clientsTable->where('status', 'Need attention')->count();
 
             return response()->json([
                 'success' => true,
