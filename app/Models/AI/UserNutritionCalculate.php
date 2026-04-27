@@ -28,6 +28,8 @@ class UserNutritionCalculate extends Model
 
     protected $casts = [
         'foods' => 'array',
+        'macros' => 'array', 
+        'nutrition' => 'array',
     ];
 
     public function user()

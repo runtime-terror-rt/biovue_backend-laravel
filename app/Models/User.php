@@ -101,7 +101,7 @@ class User extends Authenticatable
 
     public function nutritionLogs()
     {
-        return $this->hasMany(NutritionLog::class);
+        return $this->hasMany(AI\UserNutritionCalculate::class, 'user_id');
     }
 
     public function targetGoals()
