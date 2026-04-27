@@ -248,18 +248,24 @@ class TrainerController extends Controller
             return DB::transaction(function () use ($request, $trainer, $details) {
                 $plainPassword = $this->generateStrongPassword();
 
-                $user = \App\Models\User::firstOrCreate(
-                    ['email' => $request->email],
-                    [
+                $user = \App\Models\User::where('email', $request->email)->first();
+
+                if ($user) {
+                    $user->update([
+                        'password' => Hash::make($plainPassword),
+                        'status' => 'pending'
+                    ]);
+                } else {
+                    $user = \App\Models\User::create([
+                        'email' => $request->email,
                         'name' => 'Pending User',
                         'password' => Hash::make($plainPassword),
                         'status' => 'pending',
                         'user_type' => 'individual'
-                    ]
-                );
+                    ]);
+                }
 
                 $token = \Illuminate\Support\Str::random(40);
-
                 Invitation::updateOrCreate(
                     ['email' => $request->email],
                     [
@@ -276,7 +282,7 @@ class TrainerController extends Controller
             });
         } catch (\Exception $e) {
             \Log::error("Invitation Error: " . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Failed to send invitation. Please try again.'], 500);
+            return response()->json(['success' => false, 'message' => 'Failed to send invitation.'], 500);
         }
     }
 
