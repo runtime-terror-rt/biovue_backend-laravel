@@ -30,7 +30,7 @@ class InvitationMail extends Mailable
         return $this->subject('Invitation to BioVue')
                     ->view('emails.invitation')
                     ->with([
-                        'url' => 'https://biovuedigitalwellness.com/accept-invitation/' . $this->token,
+                        'url' => 'https://api.biovuedigitalwellness.com/api/v1/accept/invitation/' . $this->token,
                         'trainerName' => $this->trainer->name,
                     ]);
     }
