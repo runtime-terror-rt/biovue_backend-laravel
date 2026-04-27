@@ -11,6 +11,7 @@ use App\Mail\InvitationMail;
 use App\Models\ProjectionCredit;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Hash;
 
 class TrainerController extends Controller
 {
@@ -228,7 +229,7 @@ class TrainerController extends Controller
     {
         $request->validate([
             'email' => 'required|email',
-            'match_reason' => 'nullable',
+            'match_reason' => 'nullable|string',
             'recommended_actions' => 'nullable|array',
         ]);
 
@@ -238,27 +239,45 @@ class TrainerController extends Controller
             return response()->json(['success' => false, 'message' => 'Capacity reached'], 400);
         }
 
-        $token = \Illuminate\Support\Str::random(40);
-
         $details = [
             'match_reason' => $request->match_reason,
             'recommended_actions' => $request->recommended_actions
         ];
 
-        Invitation::create([
-            'trainer_id' => $trainer->id, 
-            'email'      => $request->email,
-            'token'      => $token,
-            'status'     => 'pending'
-        ]);
+        try {
+            return DB::transaction(function () use ($request, $trainer, $details) {
+                $plainPassword = $this->generateStrongPassword();
 
-        \Illuminate\Support\Facades\Mail::to($request->email)
-            ->send(new \App\Mail\InvitationMail($trainer, $token, $details));
+                $user = \App\Models\User::firstOrCreate(
+                    ['email' => $request->email],
+                    [
+                        'name' => 'Pending User',
+                        'password' => Hash::make($plainPassword),
+                        'status' => 'pending',
+                        'user_type' => 'individual'
+                    ]
+                );
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Invitation sent successfully!',
-        ]);
+                $token = \Illuminate\Support\Str::random(40);
+
+                Invitation::updateOrCreate(
+                    ['email' => $request->email],
+                    [
+                        'trainer_id' => $trainer->id,
+                        'token' => $token,
+                        'status' => 'pending'
+                    ]
+                );
+
+                \Illuminate\Support\Facades\Mail::to($request->email)
+                    ->send(new \App\Mail\InvitationMail($trainer, $token, $details, $request->email, $plainPassword));
+
+                return response()->json(['success' => true, 'message' => 'Invitation sent!']);
+            });
+        } catch (\Exception $e) {
+            \Log::error("Invitation Error: " . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Failed to send invitation. Please try again.'], 500);
+        }
     }
 
     private function isCapacityReached($professionalId)
@@ -274,76 +293,86 @@ class TrainerController extends Controller
 
     public function acceptInvitation($token)
     {
-        $invitation = Invitation::where('token', $token)
-            ->where('status', 'pending')
-            ->firstOrFail();
+        $invitation = Invitation::where('token', $token)->where('status', 'pending')->firstOrFail();
+        
+        $user = \App\Models\User::where('email', $invitation->email)->first();
 
-        $trainerCredit = ProjectionCredit::where('user_id', $invitation->trainer_id)->first();
-
-        if (!$trainerCredit || $trainerCredit->member_limit <= 0) {
-            return redirect()->to('https://biovuedigitalwellness.com/error?msg=capacity_reached');
+        if (!$user) {
+            return redirect()->to('https://biovuedigitalwellness.com/register?error=user_not_found');
         }
 
-        $user = auth()->user();
-
-        if (!$user || $user->email !== $invitation->email) {
-            return redirect()->to('https://biovuedigitalwellness.com/register?email=' . $invitation->email);
-        }
-
-        \Illuminate\Support\Facades\DB::table('connect_user_proffesions')->updateOrInsert([
-            'profession_id' => $invitation->trainer_id,
-            'user_id'       => $user->id,
-        ], [
-            'created_at' => now(),
-            'updated_at' => now()
+        $user->update([
+            'status' => 'active',
+            'email_verified_at' => now()
         ]);
 
+        \Illuminate\Support\Facades\DB::table('connect_user_proffesions')->updateOrInsert(
+            ['profession_id' => $invitation->trainer_id, 'user_id' => $user->id],
+            ['created_at' => now(), 'updated_at' => now()]
+        );
+
         $invitation->update(['status' => 'accepted']);
+        ProjectionCredit::where('user_id', $invitation->trainer_id)->decrement('member_limit');
 
-        $trainerCredit->decrement('member_limit');
+        return redirect()->to('https://biovuedigitalwellness.com/login?message=Account+activated+successfully');
+    }
 
-        return redirect()->to('https://biovuedigitalwellness.com/user-dashboard');
+    private function generateStrongPassword()
+    {
+        $chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+        $password = substr(str_shuffle("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), 0, 2) . 
+                    substr(str_shuffle("abcdefghijklmnopqrstuvwxyz"), 0, 2) . 
+                    substr(str_shuffle("0123456789"), 0, 2) . 
+                    substr(str_shuffle("!@#$%^&*"), 0, 2);
+        return str_shuffle($password);
     }
 
     public function giftCredit(Request $request)
     {
         $request->validate([
-            'receiver_id' => 'required|exists:users,id',
+            'receiver_ids' => 'required|array',
+            'receiver_ids.*' => 'exists:users,id',
             'amount' => 'required|integer|min:1',
         ]);
 
         $trainer = auth()->user();
-        $amount = $request->amount;
+        $amountPerUser = $request->amount;
+        $receiverIds = $request->receiver_ids;
+        $totalNeededAmount = count($receiverIds) * $amountPerUser;
 
         try {
-            return DB::transaction(function () use ($trainer, $request, $amount) {
+            return DB::transaction(function () use ($trainer, $receiverIds, $amountPerUser, $totalNeededAmount) {
                 
                 $trainerCredit = ProjectionCredit::where('user_id', $trainer->id)->lockForUpdate()->first();
 
-                if (!$trainerCredit || $trainerCredit->projection_limit < $amount) {
+                if (!$trainerCredit || $trainerCredit->projection_limit < $totalNeededAmount) {
                     return response()->json([
                         'success' => false, 
-                        'message' => 'Insufficient projection credits.'
+                        'message' => "Insufficient projection credits. You need total $totalNeededAmount credits."
                     ], 400);
                 }
 
-                $receiverCredit = ProjectionCredit::firstOrCreate(
-                    ['user_id' => $request->receiver_id],
-                    ['projection_limit' => 0]
-                );
+                foreach ($receiverIds as $receiverId) {
+                    $receiverCredit = ProjectionCredit::firstOrCreate(
+                        ['user_id' => $receiverId],
+                        ['projection_limit' => 0]
+                    );
+                    
+                    $receiverCredit->increment('projection_limit', $amountPerUser);
+                }
 
-                $trainerCredit->decrement('projection_limit', $amount);
-                $receiverCredit->increment('projection_limit', $amount);
+                $trainerCredit->decrement('projection_limit', $totalNeededAmount);
 
                 return response()->json([
                     'success' => true,
-                    'message' => "Successfully gifted $amount credit(s).",
+                    'message' => "Successfully gifted $amountPerUser credit(s) to " . count($receiverIds) . " user(s).",
+                    'total_deducted' => $totalNeededAmount,
                     'remaining_credit' => $trainerCredit->fresh()->projection_limit
                 ]);
             });
 
         } catch (\Exception $e) {
-            \Log::error("Credit Gift Error: " . $e->getMessage());
+            \Log::error("Credit Bulk Gift Error: " . $e->getMessage());
             return response()->json([
                 'success' => false, 
                 'message' => 'Something went wrong during the transfer.'

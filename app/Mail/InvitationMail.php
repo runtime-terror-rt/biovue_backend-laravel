@@ -13,26 +13,25 @@ class InvitationMail extends Mailable
     public $trainer;
     public $token;
     public $details;
-    /**
-     * Create a new message instance.
-     */
-    public function __construct($trainer, $token, $details)
+    public $email;
+    public $plainPassword;
+
+    public function __construct($trainer, $token, $details, $email, $plainPassword)
     {
         $this->trainer = $trainer;
         $this->token = $token;
         $this->details = $details;
+        $this->email = $email;
+        $this->plainPassword = $plainPassword;
     }
-    /**
-     * Build the message.
-     */
+
     public function build()
     {
-        return $this->subject('Invitation from ' . $this->trainer->name)
-            ->view('emails.invitation') 
-            ->with([
-                'trainerName' => $this->trainer->name,
-                'url' => url('/api/v1/invitation/accept/' . $this->token), 
-                'details' => $this->details, 
-            ]);
+        return $this->subject('Invitation to BioVue')
+                    ->view('emails.invitation')
+                    ->with([
+                        'url' => 'https://biovuedigitalwellness.com/accept-invitation/' . $this->token,
+                        'trainerName' => $this->trainer->name,
+                    ]);
     }
 }
