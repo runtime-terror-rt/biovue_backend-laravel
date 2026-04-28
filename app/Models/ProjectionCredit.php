@@ -10,6 +10,7 @@ class ProjectionCredit extends Model
         'user_id',
         'member_limit',
         'projection_limit',
+        'expiry_date'
     ];
 
     // User relation

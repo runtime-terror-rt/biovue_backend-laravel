@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->integer('projection_limit')->default(1);
             $table->integer('member_limit')->nullable();
+            $table->date('expiry_date')->nullable();
             $table->timestamps();
         });
     }

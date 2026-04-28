@@ -75,6 +75,8 @@ class PlanPaymentController extends Controller
         $request->validate([
             'plan_id' => 'required|exists:plans,id',
             'billing' => 'required|in:monthly,half_annual,annual,custom',
+            'meter_id' => 'nullable|string',
+            'meter_event_name' => 'nullable|string',
         ]);
 
         $plan = Plan::findOrFail($request->plan_id);
@@ -124,8 +126,10 @@ class PlanPaymentController extends Controller
                     'quantity' => 1,
                 ]],
                 'metadata' => [
-                    'payment_id' => $payment->id,
-                    'user_id'    => $user->id,
+                    'payment_id'       => $payment->id,
+                    'user_id'          => $user->id,
+                    'meter_id'         => $request->meter_id ?? null,
+                    'meter_event_name' => $request->meter_event_name ?? null,
                 ],
                 'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url'  => url('/api/v1/payment/cancel'),
@@ -169,6 +173,7 @@ class PlanPaymentController extends Controller
             [
                 'projection_limit' => $plan->projection_limit,
                 'member_limit'     => $plan->member_limit,
+                'expiry_date'       => now()->addDays($duration),
                 'updated_at'       => now(),
             ]
         );
@@ -193,24 +198,22 @@ class PlanPaymentController extends Controller
 
         if ($event->type === 'checkout.session.completed') {
             $session = $event->data->object;
-
             $paymentId = $session->metadata->payment_id ?? null;
+
+            $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
 
             DB::beginTransaction();
             try {
-                $payment = null;
-                if ($paymentId) {
-                    $payment = PlanPayment::with(['user', 'plan'])->find($paymentId);
-                } else {
-                    $payment = PlanPayment::with(['user', 'plan'])
-                        ->where('transaction_id', $session->id)
-                        ->first();
-                }
+                $payment = $paymentId ? PlanPayment::with(['user', 'plan'])->find($paymentId) : 
+                        PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
 
                 if ($payment && $payment->status !== 'paid') {
-                    $subId = $session->subscription ?? $session->id;
+                    $subId = $session->subscription;
 
-                    $this->activateSubscription($payment, $payment->user, $payment->plan, $subId);
+                    $stripeSub = $stripe->subscriptions->retrieve($subId);
+
+                    $trialEnds = $stripeSub->trial_end ? \Carbon\Carbon::createFromTimestamp($stripeSub->trial_end) : null;
+                    $endsAt = $stripeSub->current_period_end ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end) : null;
 
                     $subscription = \App\Models\Subscription::updateOrCreate(
                         ['stripe_id' => $subId],
@@ -220,26 +223,31 @@ class PlanPaymentController extends Controller
                             'stripe_status' => 'active',
                             'stripe_price'  => $payment->amount, 
                             'quantity'      => 1,
+                            'trial_ends_at' => $trialEnds,
+                            'ends_at'       => $endsAt,
                         ]
                     );
 
                     \App\Models\SubscriptionItem::updateOrCreate(
                         ['subscription_id' => $subscription->id],
                         [
-                            'stripe_id'      => $subId,
-                            'stripe_product' => $payment->plan->name ?? 'N/A',
-                            'stripe_price'   => $payment->amount,
-                            'quantity'       => 1,
+                            'stripe_id'        => $subId,
+                            'stripe_product'   => $payment->plan->name ?? 'N/A',
+                            'stripe_price'     => $payment->amount,
+                            'quantity'         => 1,
+                            'meter_id'         => $stripeSub->metadata->meter_id ?? null,
+                            'meter_event_name' => $stripeSub->metadata->meter_event_name ?? null,
                         ]
                     );
 
+                    $this->activateSubscription($payment, $payment->user, $payment->plan, $subId);
+                    
                     $admin = User::find(1);
                     if ($admin) $admin->notify(new AdminNotification('New Subscription', "{$payment->user->name} onboarded", 'subscription'));
                     $payment->user->notify(new SubscriptionNotification('Success', 'Your subscription is active', 'subscription'));
 
                     $payment->update(['status' => 'paid']);
-
-                    Log::info('Payment and Subscription saved for ID: ' . $payment->id);
+                    Log::info('Webhook processed successfully for Payment ID: ' . $payment->id);
                 }
                 DB::commit();
             } catch (\Exception $e) {

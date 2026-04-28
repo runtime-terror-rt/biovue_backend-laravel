@@ -1034,7 +1034,7 @@ private function formatFoods($foods)
 
     public function getConnectedUsersList()
     {
-       $lists = ConnectUserProffesion::get();
+       $lists = ConnectUserProffesion::with('profession:id,name,profession_type', 'user:id,name')->get();
        return $lists;
     }
 
