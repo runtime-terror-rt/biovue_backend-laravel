@@ -166,7 +166,7 @@ Route::prefix('v1')->group(function () {
         Route::get('trainer-overview', [UserController::class, 'trainerOverview']);
         Route::post('connect-profession', [UserController::class, 'connectToProfession']);
         Route::get('connected-professions', [UserController::class, 'getMyConnections']);
-
+        Route::get('connected-user-lists', [UserController::class, 'getConnectedUsersList']);
         Route::get('professionals-data/{id}', [TrainerController::class, 'indexProfessionals']);
         Route::get('professional-client-card', [TrainerController::class, 'professionalClientCard']);
        //AIObser

@@ -193,7 +193,7 @@ class PlanPaymentController extends Controller
 
         if ($event->type === 'checkout.session.completed') {
             $session = $event->data->object;
-            
+
             $paymentId = $session->metadata->payment_id ?? null;
 
             DB::beginTransaction();
@@ -209,15 +209,37 @@ class PlanPaymentController extends Controller
 
                 if ($payment && $payment->status !== 'paid') {
                     $subId = $session->subscription ?? $session->id;
-                    
+
                     $this->activateSubscription($payment, $payment->user, $payment->plan, $subId);
-                    
-                    // Notifications
+
+                    $subscription = \App\Models\Subscription::updateOrCreate(
+                        ['stripe_id' => $subId],
+                        [
+                            'user_id'       => $payment->user_id,
+                            'type'          => 'default',
+                            'stripe_status' => 'active',
+                            'stripe_price'  => $payment->amount, 
+                            'quantity'      => 1,
+                        ]
+                    );
+
+                    \App\Models\SubscriptionItem::updateOrCreate(
+                        ['subscription_id' => $subscription->id],
+                        [
+                            'stripe_id'      => $subId,
+                            'stripe_product' => $payment->plan->name ?? 'N/A',
+                            'stripe_price'   => $payment->amount,
+                            'quantity'       => 1,
+                        ]
+                    );
+
                     $admin = User::find(1);
-                    if($admin) $admin->notify(new AdminNotification('New Subscription', "{$payment->user->name} onboarded", 'subscription'));
+                    if ($admin) $admin->notify(new AdminNotification('New Subscription', "{$payment->user->name} onboarded", 'subscription'));
                     $payment->user->notify(new SubscriptionNotification('Success', 'Your subscription is active', 'subscription'));
-                    
-                    Log::info('Payment marked as paid for ID: ' . $payment->id);
+
+                    $payment->update(['status' => 'paid']);
+
+                    Log::info('Payment and Subscription saved for ID: ' . $payment->id);
                 }
                 DB::commit();
             } catch (\Exception $e) {

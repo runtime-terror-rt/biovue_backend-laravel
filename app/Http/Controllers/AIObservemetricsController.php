@@ -66,71 +66,71 @@ class AIObservemetricsController extends Controller
     }
 
     public function index($id)
-{
-    try {
-        $user = \App\Models\User::find($id);
+    {
+        try {
+            $user = \App\Models\User::find($id);
 
-        if (!$user) {
-            return response()->json(['success' => false, 'message' => 'User not found'], 404);
-        }
-
-        // Fetching latest records
-        $activity = $user->activityLogs()->latest('log_date')->first();
-        $nutrition = $user->nutritionLogs()->latest('log_date')->first();
-        $stress = $user->stressLogs()->latest('log_date')->first();
-        $hydration = $user->hydrationLogs()->latest('log_date')->first();
-
-        // =========================
-        // Calculations
-        // =========================
-
-        $nutritionQuality = 0;
-        $targetGoal = 200; 
-
-        if ($nutrition) {
-            $protein = (float)($nutrition->protein_value ?? 0);
-            $carbs   = (float)($nutrition->carbs_value ?? 0);
-            
-            $total = $protein + $carbs;
-            
-            if ($targetGoal > 0) {
-                $nutritionQuality = round(($total / $targetGoal) * 100);
+            if (!$user) {
+                return response()->json(['success' => false, 'message' => 'User not found'], 404);
             }
+
+            // Fetching latest records
+            $activity = $user->activityLogs()->latest('log_date')->first();
+            $nutrition = $user->nutritionLogs()->latest('log_date')->first();
+            $stress = $user->stressLogs()->latest('log_date')->first();
+            $hydration = $user->hydrationLogs()->latest('log_date')->first();
+
+            // =========================
+            // Calculations
+            // =========================
+
+            $nutritionQuality = 0;
+            $targetGoal = 200; 
+
+            if ($nutrition) {
+                $protein = (float)($nutrition->protein_value ?? 0);
+                $carbs   = (float)($nutrition->carbs_value ?? 0);
+                
+                $total = $protein + $carbs;
+                
+                if ($targetGoal > 0) {
+                    $nutritionQuality = round(($total / $targetGoal) * 100);
+                }
+            }
+
+            $sleepFormatted = null;
+            if ($activity && $activity->sleep_hours) {
+                $hours = floor($activity->sleep_hours);
+                $minutes = round(($activity->sleep_hours - $hours) * 60);
+                $sleepFormatted = $hours . 'h ' . $minutes . 'm';
+            }
+
+            $stressLabel = $stress->stress_level ?? null;
+            if ($stressLabel) {
+                $stressLabel = ($stressLabel >= 4) ? 'High' : (($stressLabel >= 2) ? 'Moderate' : 'Low');
+            }
+
+            $hydrationOz = ($hydration && isset($hydration->water_glasses)) ? ($hydration->water_glasses * 8) . ' oz' : null;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'weight'            => $activity->weight ?? null,
+                    'nutrition_quality' => $nutritionQuality . '%',
+                    'steps'             => $activity->daily_steps ?? 0,
+                    'sleep'             => $sleepFormatted,
+                    'stress'            => $stressLabel,
+                    'hydration'         => $hydrationOz,
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error("Index Error: " . $e->getMessage());
+            return response()->json([
+                'success' => false, 
+                'message' => 'Something went wrong',
+                'error'   => $e->getMessage()
+            ], 500);
         }
-
-        $sleepFormatted = null;
-        if ($activity && $activity->sleep_hours) {
-            $hours = floor($activity->sleep_hours);
-            $minutes = round(($activity->sleep_hours - $hours) * 60);
-            $sleepFormatted = $hours . 'h ' . $minutes . 'm';
-        }
-
-        $stressLabel = $stress->stress_level ?? null;
-        if ($stressLabel) {
-            $stressLabel = ($stressLabel >= 4) ? 'High' : (($stressLabel >= 2) ? 'Moderate' : 'Low');
-        }
-
-        $hydrationOz = ($hydration && isset($hydration->water_glasses)) ? ($hydration->water_glasses * 8) . ' oz' : null;
-
-        return response()->json([
-            'success' => true,
-            'data' => [
-                'weight'            => $activity->weight ?? null,
-                'nutrition_quality' => $nutritionQuality . '%',
-                'steps'             => $activity->daily_steps ?? 0,
-                'sleep'             => $sleepFormatted,
-                'stress'            => $stressLabel,
-                'hydration'         => $hydrationOz,
-            ]
-        ], 200);
-
-    } catch (\Exception $e) {
-        \Log::error("Index Error: " . $e->getMessage());
-        return response()->json([
-            'success' => false, 
-            'message' => 'Something went wrong',
-            'error'   => $e->getMessage()
-        ], 500);
     }
-}
 }

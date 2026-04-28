@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\ConnectUserProffesion;
 use App\Models\ProjectionCredit;
 use App\Models\Schedule;
 use App\Models\User;
@@ -1029,6 +1030,12 @@ private function formatFoods($foods)
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
+    }
+
+    public function getConnectedUsersList()
+    {
+       $lists = ConnectUserProffesion::get();
+       return $lists;
     }
 
     private function isCapacityReached($professionalId)
