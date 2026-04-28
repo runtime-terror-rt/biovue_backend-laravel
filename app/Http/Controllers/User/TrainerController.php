@@ -346,14 +346,28 @@ class TrainerController extends Controller
         ]);
 
         $trainer = auth()->user();
+        
+        $latestPayment = \App\Models\PlanPayment::where('user_id', $trainer->id)
+            ->where('status', 'paid')
+            ->latest()
+            ->first();
+
+        if (!$latestPayment || !$latestPayment->end_date) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your subscription is not active or expiry date not found.'
+            ], 400);
+        }
+
+        $expiryDate = $latestPayment->end_date;
         $amountPerUser = $request->amount;
         $receiverIds = $request->receiver_ids;
         $totalNeededAmount = count($receiverIds) * $amountPerUser;
 
         try {
-            return DB::transaction(function () use ($trainer, $receiverIds, $amountPerUser, $totalNeededAmount) {
+            return DB::transaction(function () use ($trainer, $receiverIds, $amountPerUser, $totalNeededAmount, $expiryDate) {
                 
-                $trainerCredit = ProjectionCredit::where('user_id', $trainer->id)->lockForUpdate()->first();
+                $trainerCredit = \App\Models\ProjectionCredit::where('user_id', $trainer->id)->lockForUpdate()->first();
 
                 if (!$trainerCredit || $trainerCredit->projection_limit < $totalNeededAmount) {
                     return response()->json([
@@ -363,9 +377,9 @@ class TrainerController extends Controller
                 }
 
                 foreach ($receiverIds as $receiverId) {
-                    $receiverCredit = ProjectionCredit::firstOrCreate(
+                    $receiverCredit = \App\Models\ProjectionCredit::updateOrCreate(
                         ['user_id' => $receiverId],
-                        ['projection_limit' => 0]
+                        ['expiry_date' => $expiryDate]
                     );
                     
                     $receiverCredit->increment('projection_limit', $amountPerUser);
