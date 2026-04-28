@@ -18,6 +18,7 @@ class SleepController extends Controller
             'user_id' => 'required|exists:users,id',
             'log_date' => 'required|date',
             'weight' => 'nullable|integer',
+            'unit' => 'nullable|string',
             'daily_steps' => 'nullable|integer',
             'sleep_hours' => 'nullable|numeric',
             'water_glasses' => 'nullable|integer',

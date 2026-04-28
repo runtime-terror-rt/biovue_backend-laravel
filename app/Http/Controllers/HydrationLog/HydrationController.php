@@ -28,6 +28,7 @@ class HydrationController extends Controller
         $validated = $request->validate([
             'log_date'      => 'required|date',
             'weight'        => 'nullable|numeric|min:0',
+            'unit'          => 'nullable|string',
             'daily_steps'   => 'nullable|integer|min:0',
             'sleep_hours'   => 'nullable|numeric|min:0|max:24',
             'water_glasses' => 'nullable|integer|min:0',

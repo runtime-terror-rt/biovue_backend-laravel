@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->date('log_date');
             $table->decimal('weight', 5, 2)->nullable(); 
+            $table->string('unit')->nullable();
             $table->unsignedMediumInteger('daily_steps')->nullable(); 
             $table->decimal('sleep_hours', 4, 2)->nullable(); 
             $table->unsignedTinyInteger('water_glasses')->nullable(); 
