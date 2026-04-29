@@ -35,6 +35,7 @@ class User extends Authenticatable
         'plan_id',
         'user_type',
         'profession_type',
+        'is_invited'
     ];
 
     /**
@@ -61,6 +62,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'status' => 'string',
             'user_type' => 'string',
+            'is_invited' => 'boolean',
         ];
     }
 

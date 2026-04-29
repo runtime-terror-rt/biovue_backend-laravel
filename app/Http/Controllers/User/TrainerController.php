@@ -52,7 +52,7 @@ class TrainerController extends Controller
         }
     }
 
-   public function professionalClientCard()
+    public function professionalClientCard()
     {
         try {
             $user = auth()->user();
@@ -258,10 +258,11 @@ class TrainerController extends Controller
                 } else {
                     $user = \App\Models\User::create([
                         'email' => $request->email,
-                        'name' => 'Pending User',
+                        'name' => 'Invite User',
                         'password' => Hash::make($plainPassword),
                         'status' => 'pending',
-                        'user_type' => 'individual'
+                        'user_type' => 'individual',
+                        'is_invited' => true
                     ]);
                 }
 
@@ -285,6 +286,7 @@ class TrainerController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to send invitation.'], 500);
         }
     }
+    
     private function isCapacityReached($professionalId)
     {
         $limit = ProjectionCredit::where('user_id', $professionalId)->value('member_limit') ?? 0;

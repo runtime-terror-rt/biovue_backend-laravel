@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use App\Jobs\SendOtpEmail;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 
 class LoginController extends Controller
@@ -38,7 +39,13 @@ class LoginController extends Controller
                 ], 401);
             }
 
-            // ✅ Check email verification
+            $invitationStatus = 'Not Invited';
+
+            if ($user->is_invited) {
+                $invitation = DB::table('invitations')->where('email', $user->email)->first();
+                
+                $invitationStatus = $invitation ? $invitation->status : 'accepted'; 
+            }
             if (!$user->email_verified_at) {
                 return response()->json([
                     'success' => false,
@@ -47,12 +54,9 @@ class LoginController extends Controller
             }
 
             $profileStatus = $user->profile()->exists() ? 'Your profile is complete.' : 'Your profile is incomplete. Please complete your profile to access all features.';
-            // ✅ Generate token
             $token = $user->createToken('auth_token_' . $user->id)->plainTextToken;
-            // ✅ Get plan duration in integer days
             $planDuration = $this->getPlanDuration($user);
             $projectionCredits = $user->projectionCredits ? $user->projectionCredits->projection_limit : 0;
-            // ✅ Return success response
             return response()->json([
                 'success' => true,
                 'message' => 'Login successful.',
@@ -63,15 +67,15 @@ class LoginController extends Controller
                         'role' => $user->getRoleNames()->first() ?? null,
                         'plan_id' => $user->plan_id,
                         'plan_name' => $user->plan->name?? null,
-                        'plan_duration' => $planDuration, // integer days
-                        'user_type' => $user->user_type ?? null,          // <-- added
-                        'profession_type' => $user->profession_type ?? null, // <-- added
+                        'plan_duration' => $planDuration, 
+                        'user_type' => $user->user_type ?? null,   
+                        'profession_type' => $user->profession_type ?? null,
                         'projection_credits' => $projectionCredits,
                         'is_profile_completed' => $profileStatus,
-                            
-                    // ✅ Add timestamps
-                            'created_at' => $user->created_at->toDateTimeString(),
-                            'updated_at' => $user->updated_at->toDateTimeString(),
+                        'is_invited' => $user->is_invited,
+                        'invitation_status' => $invitationStatus,
+                        'created_at' => $user->created_at->toDateTimeString(),
+                        'updated_at' => $user->updated_at->toDateTimeString(),
                     ],
                 
                     'token' => $token,
@@ -80,7 +84,6 @@ class LoginController extends Controller
             ], 200);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            // ✅ Validation error: first message only
             $firstError = collect($e->errors())->flatten()->first();
 
             return response()->json([

@@ -31,7 +31,7 @@ class UserController extends Controller
         return response()->json($user);
     }
 
-   public function individualUsers(Request $request)
+    public function individualUsers(Request $request)
     {
         try {
             $query = User::role('individual'); // Spatie scope
@@ -497,7 +497,8 @@ class UserController extends Controller
 
     /** * Helper for Consistency Metrics formatting 
      */
-    private function formatMetric($title, $avg, $suffix, $count, $days, $isSteps = false) {
+    private function formatMetric($title, $avg, $suffix, $count, $days, $isSteps = false) 
+    {
         $val = $isSteps ? number_format($avg ?? 0) : round($avg ?? 0, 1);
         return [
             'title' => $title,
@@ -625,16 +626,16 @@ class UserController extends Controller
         ]);
     }
 
-/**
- * Helper to safely format foods array/json to string
- */
-private function formatFoods($foods)
-{
-    if (is_string($foods)) {
-        $foods = json_decode($foods, true);
+    /**
+     * Helper to safely format foods array/json to string
+     */
+    private function formatFoods($foods)
+    {
+        if (is_string($foods)) {
+            $foods = json_decode($foods, true);
+        }
+        return is_array($foods) ? implode(', ', $foods) : "Meal tracked";
     }
-    return is_array($foods) ? implode(', ', $foods) : "Meal tracked";
-}
 
     private function formatConsistency($title, $logs, $totalDays, $target, $column = 'sleep_hours', $isStress = false)
     {
@@ -786,7 +787,8 @@ private function formatFoods($foods)
         ];
     }
 
-    protected function getWeightDiff($logs) {
+    protected function getWeightDiff($logs) 
+    {
         if ($logs->count() < 2) return "0.0 lbs";
         $diff = $logs->last()->weight - $logs->first()->weight;
         return ($diff > 0 ? "+" : "") . round($diff, 1) . " lbs";
