@@ -150,69 +150,26 @@ class UserController extends Controller
             $startOfWeek = now()->startOfWeek()->toDateString();
             $endOfWeek   = now()->today()->toDateString();
 
-            $activityLogs = DB::table('activity_logs')
-                ->where('user_id', $id)
-                ->whereBetween('log_date', [$startOfWeek, $endOfWeek])
-                ->orderBy('log_date', 'desc')
-                ->get();
+            $activityLogs = DB::table('activity_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->orderBy('log_date', 'desc')->get();
+            $nutritionLogs = DB::table('user_nutrition_calculates')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $hydrationLogs = DB::table('hydration_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $sleepLogs = DB::table('sleep_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $stressLogs = DB::table('stress_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
 
-            $nutritionLogs = DB::table('user_nutrition_calculates')
-                ->where('user_id', $id)
-                ->whereBetween('log_date', [$startOfWeek, $endOfWeek])
-                ->get();
+            $latestLog = $activityLogs->first();
+            $activityUnit = ($latestLog && !empty($latestLog->unit)) ? $latestLog->unit : ($user->profile->unit ?? 'imperial');
+            
+            $heightCm = (float)($user->profile->height ?? 0);
+            $rawWeight = ($latestLog && isset($latestLog->weight) && $latestLog->weight > 0) ? (float)$latestLog->weight : (float)($user->profile->weight ?? 0);
 
-            $hydrationLogs = DB::table('hydration_logs')
-                ->where('user_id', $id)
-                ->whereBetween('log_date', [$startOfWeek, $endOfWeek])
-                ->get();
-
-            $sleepLogs = DB::table('sleep_logs')
-                ->where('user_id', $id)
-                ->whereBetween('log_date', [$startOfWeek, $endOfWeek])
-                ->get();
-
-            $stressLogs = DB::table('stress_logs')
-                ->where('user_id', $id)
-                ->whereBetween('log_date', [$startOfWeek, $endOfWeek])
-                ->get();
-
-            // ─── Unit: from activity_logs latest row, fallback to profile ─
-            $latestLog   = $activityLogs->first();
-            $activityUnit = ($latestLog && !empty($latestLog->unit))
-                                ? $latestLog->unit
-                                : ($user->profile->unit ?? 'imperial');
-
-            // Unit from target_goals table
-            $targetUnit = !empty($user->targetGoals->unit)
-                            ? $user->targetGoals->unit
-                            : $activityUnit;
-
-            // ─── Height from user_profiles ────────────────────────────────
-            // imperial: stored in inches | metric: stored in cm
-            $height = (float)($user->profile->height ?? 0);
-
-            // ─── Current Weight from activity_logs, fallback to profile ───
-            // Weight is stored in the same unit as activity_logs.unit
-            $rawWeight = ($latestLog && isset($latestLog->weight) && $latestLog->weight > 0)
-                            ? (float)$latestLog->weight
-                            : (float)($user->profile->weight ?? 0);
-
-            // Display weight with correct label based on activity unit
-            $weightLabel   = $activityUnit === 'imperial' ? ' lbs' : ' kg';
-            $displayWeight = $rawWeight; // already in correct unit, no conversion needed
-
-            // ─── BMI Calculation ──────────────────────────────────────────
-            // Imperial: weight(lbs) / height(inches)^2 * 703
-            // Metric  : weight(kg)  / height(m)^2
             $bmi = 0;
-            if ($height > 0 && $displayWeight > 0) {
+            if ($heightCm > 0 && $rawWeight > 0) {
                 if ($activityUnit === 'imperial') {
-                    // height in inches, weight in lbs
-                    $bmi = ($displayWeight / ($height * $height)) * 703;
+                    $heightInches = $heightCm / 2.54;
+                    $bmi = ($rawWeight / ($heightInches * $heightInches)) * 703;
                 } else {
-                    // height in cm → convert to meters
-                    $heightInMeters = $height / 100;
-                    $bmi = $displayWeight / ($heightInMeters * $heightInMeters);
+                    $heightMeters = $heightCm / 100;
+                    $bmi = $rawWeight / ($heightMeters * $heightMeters);
                 }
             }
 
@@ -224,117 +181,54 @@ class UserController extends Controller
                 default     => 'Obese',
             };
 
-            // ─── Target Weight from target_goals ──────────────────────────
-            // Use target_goals.unit to determine stored unit
-            // If target unit differs from activity unit, convert accordingly
             $targetWeightRaw = (float)($user->targetGoals->target_weight ?? 0);
+            $targetWeight = $targetWeightRaw; 
 
-            if ($targetUnit === 'imperial' && $activityUnit === 'imperial') {
-                // Both imperial: no conversion needed
-                $targetWeight = $targetWeightRaw;
-            } elseif ($targetUnit === 'metric' && $activityUnit === 'metric') {
-                // Both metric: no conversion needed
-                $targetWeight = $targetWeightRaw;
-            } elseif ($targetUnit === 'metric' && $activityUnit === 'imperial') {
-                // Target stored in kg, display in lbs
-                $targetWeight = round($targetWeightRaw * 2.20462, 1);
-            } else {
-                // Target stored in lbs, display in kg
-                $targetWeight = round($targetWeightRaw / 2.20462, 1);
-            }
+            $weightLabel = $activityUnit === 'imperial' ? ' lbs' : ' kg';
 
-            $targetWeightLabel = $activityUnit === 'imperial' ? ' lbs' : ' kg';
-
-            // ─── Daily Steps (unit-independent) ───────────────────────────
             $avgSteps = (float)($activityLogs->avg('daily_steps') ?? 0);
             $stepGoal = (int)($user->targetGoals->daily_step_goal ?? 10000);
-
-            // ─── Sleep Hours ──────────────────────────────────────────────
-            // sleep_hours is unit-independent (always in hours)
-            // prefer sleep_logs table, fallback to activity_logs
-            $avgSleep    = $sleepLogs->count() > 0
-                            ? (float)$sleepLogs->avg('sleep_hours')
-                            : (float)($activityLogs->avg('sleep_hours') ?? 0);
+            $avgSleep = $sleepLogs->count() > 0 ? (float)$sleepLogs->avg('sleep_hours') : (float)($activityLogs->avg('sleep_hours') ?? 0);
             $sleepTarget = (float)($user->targetGoals->sleep_target ?? 8);
-
-            // ─── Hydration ────────────────────────────────────────────────
-            // Imperial: glasses (8 oz each) | Metric: glasses (250ml each)
-            // prefer hydration_logs table, fallback to activity_logs
-            $avgHydration = $hydrationLogs->count() > 0
-                            ? (float)$hydrationLogs->avg('water_glasses')
-                            : (float)($activityLogs->avg('water_glasses') ?? 0);
-            $waterTarget  = (float)($user->targetGoals->water_target ?? 8);
-
-            // ─── Days Active this week ────────────────────────────────────
+            $avgHydration = $hydrationLogs->count() > 0 ? (float)$hydrationLogs->avg('water_glasses') : (float)($activityLogs->avg('water_glasses') ?? 0);
+            $waterTarget = (float)($user->targetGoals->water_target ?? 8);
             $daysActive = $activityLogs->unique('log_date')->count();
-
-            // ─── Wellness Score out of 100 ────────────────────────────────
-            // activity: 30pts | steps: 25pts | sleep: 25pts | hydration: 20pts
-            $wellnessScore  = 0;
-            $wellnessScore += min(30, ($daysActive   / 7)                    * 30);
-            $wellnessScore += min(25, ($avgSteps     / max($stepGoal,    1)) * 25);
-            $wellnessScore += min(25, ($avgSleep     / max($sleepTarget, 1)) * 25);
-            $wellnessScore += min(20, ($avgHydration / max($waterTarget, 1)) * 20);
-            $wellnessScore  = min(100, (int)round($wellnessScore));
 
             return response()->json([
                 'success' => true,
-                'data'    => [
+                'data' => [
                     'summary' => [
-                        'wellness_score'      => $wellnessScore,
-                        'days_active'         => $daysActive . '/7',
-                        'data_logged_entries' => $activityLogs->count()
-                                            + $nutritionLogs->count()
-                                            + $hydrationLogs->count()
-                                            + $sleepLogs->count()
-                                            + $stressLogs->count(),
+                        'wellness_score' => 0,
+                        'days_active' => $daysActive . '/7',
+                        'data_logged_entries' => ($activityLogs->count() + $nutritionLogs->count() + $hydrationLogs->count() + $sleepLogs->count() + $stressLogs->count()),
                     ],
                     'health_overview' => [
-
-                        // Weight: stored unit = activity_logs.unit, no conversion
                         'weight' => [
-                            'current'      => $displayWeight . $weightLabel,
-                            'status'       => ($targetWeight > 0 && $displayWeight > $targetWeight)
-                                                ? 'Above target' : 'On track',
-                            'coach_target' => $targetWeight . $targetWeightLabel,
+                            'current' => round($rawWeight, 1) . $weightLabel,
+                            'status' => ($targetWeight > 0 && $rawWeight > $targetWeight) ? 'Above target' : 'On track',
+                            'coach_target' => $targetWeight . $weightLabel,
                         ],
-
-                        // BMI: imperial=(lbs/in²)×703 | metric=kg/m²
                         'bmi' => [
-                            'current'     => round($bmi, 1),
-                            'status'      => $bmiStatus,
+                            'current' => round($bmi, 1),
+                            'status' => $bmiStatus,
                             'ideal_range' => '18.5 - 24.9',
                         ],
-
-                        // Nutrition: calories/macros are unit-independent
                         'nutrition' => [
                             'total_calories' => round($nutritionLogs->sum('calories_value'), 2),
-                            'total_protein'  => round($nutritionLogs->sum('protein_value'),  2),
-                            'total_carbs'    => round($nutritionLogs->sum('carbs_value'),    2),
-                            'total_fat'      => round($nutritionLogs->sum('fat_value'),      2),
                         ],
-
-                        // Steps: unit-independent count
                         'daily_steps' => [
-                            'current'    => number_format((int)round($avgSteps)),
+                            'current' => number_format((int)round($avgSteps)),
                             'coach_plan' => number_format($stepGoal) . ' steps',
                         ],
-
-                        // Sleep: always in hours, unit-independent
                         'sleep_hours' => [
-                            'current'    => round($avgSleep, 1) . ' Hrs',
+                            'current' => round($avgSleep, 1) . ' Hrs',
                             'coach_plan' => $sleepTarget . ' Hrs',
                         ],
-
-                        // Hydration: imperial=glasses(8oz) | metric=glasses(250ml)
                         'hydration' => [
                             'current_glasses' => round($avgHydration, 1),
-                            'target'          => $waterTarget . ' glasses',
+                            'target' => $waterTarget . ' glasses',
                         ],
-
-                        // Stress & Mood: unit-independent
                         'stress_and_mood' => [
-                            'latest_mood'      => ucfirst($stressLogs->last()->mood ?? 'stable'),
                             'avg_stress_level' => round($stressLogs->avg('stress_level') ?? 0, 1),
                         ],
                     ],
