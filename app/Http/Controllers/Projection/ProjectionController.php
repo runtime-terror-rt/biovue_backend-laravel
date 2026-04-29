@@ -83,7 +83,7 @@ class ProjectionController extends Controller
     {
         // 1. Validating incoming request from your frontend/mobile
         $request->validate([
-            'image'      => 'required|image|mimes:jpeg,png,jpg,webp',
+            'image' => 'required|mimes:jpeg,jpg,png,gif,webp,avif,bmp,svg,heic,heif|max:15360',
             'timeframe'  => 'required|string',
             'resolution' => 'required|string',
         ]);

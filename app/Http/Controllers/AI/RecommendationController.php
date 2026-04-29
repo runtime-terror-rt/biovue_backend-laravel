@@ -42,8 +42,6 @@ class RecommendationController extends Controller
         }
     }
 
-
-
     /**
      * Get user suggestions for a trainer
      */
@@ -80,8 +78,6 @@ class RecommendationController extends Controller
         }
     }
 
-
-
      /**
      * Get recommended users for a nutritionist
      */
@@ -115,38 +111,35 @@ class RecommendationController extends Controller
         }
     }
 
+    public function supplierUsers($supplier_id)
+    {
+        try {
+            // Call external API
+            $response = Http::timeout(120)
+                ->withoutVerifying() // ignore SSL issues
+                ->get("https://ai.biovuedigitalwellness.com/api/v1/recommend/users/supplier/{$supplier_id}");
 
+            // Check if API call failed
+            if (!$response->successful()) {
+                return response()->json([
+                    'message' => 'Supplier recommendation API failed',
+                    'error' => $response->body()
+                ], 500);
+            }
 
-
-public function supplierUsers($supplier_id)
-{
-    try {
-        // Call external API
-        $response = Http::timeout(120)
-            ->withoutVerifying() // ignore SSL issues
-            ->get("https://ai.biovuedigitalwellness.com/api/v1/recommend/users/supplier/{$supplier_id}");
-
-        // Check if API call failed
-        if (!$response->successful()) {
+            // Return formatted response
             return response()->json([
-                'message' => 'Supplier recommendation API failed',
-                'error' => $response->body()
+                'message' => 'Recommended users fetched successfully',
+                'supplier_id' => $supplier_id,
+                'suggestions' => $response->json()['suggestions'] ?? []
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Something went wrong',
+                'error' => $e->getMessage()
             ], 500);
         }
-
-        // Return formatted response
-        return response()->json([
-            'message' => 'Recommended users fetched successfully',
-            'supplier_id' => $supplier_id,
-            'suggestions' => $response->json()['suggestions'] ?? []
-        ]);
-
-    } catch (\Exception $e) {
-        return response()->json([
-            'message' => 'Something went wrong',
-            'error' => $e->getMessage()
-        ], 500);
     }
-}
 
 }

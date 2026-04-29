@@ -301,7 +301,6 @@ class TrainerController extends Controller
     public function acceptInvitation($token)
     {
         $invitation = Invitation::where('token', $token)->where('status', 'pending')->firstOrFail();
-        
         $user = \App\Models\User::where('email', $invitation->email)->first();
 
         if (!$user) {
