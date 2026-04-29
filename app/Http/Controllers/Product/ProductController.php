@@ -31,7 +31,21 @@ class ProductController extends Controller
             'description'  => 'nullable|string',
             'redirect_url' => 'nullable|url',
             'status'       => 'nullable|in:draft,published',
-            'image'        => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            'image' => [
+                'nullable',
+                'max:15360',
+                function ($attribute, $value, $fail) {
+                    $allowedMimes = [
+                        'image/jpeg', 'image/png', 'image/gif',
+                        'image/webp', 'image/avif', 'image/bmp',
+                        'image/svg+xml', 'image/heic', 'image/heif',
+                    ];
+                    
+                    if (!in_array($value->getMimeType(), $allowedMimes)) {
+                        $fail('The ' . $attribute . ' must be a valid image format.');
+                    }
+                },
+            ],
         ]);
 
         if ($request->hasFile('image')) {

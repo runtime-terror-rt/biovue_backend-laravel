@@ -44,7 +44,21 @@ class AdsController extends Controller
             'id'         => 'nullable|exists:ads_settings,id',
             'ads_title'  => 'required|string|max:255',
             'ads_type'   => 'nullable|string',
-            'image'      => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'image' => [
+                'nullable',
+                'max:15360',
+                function ($attribute, $value, $fail) {
+                    $allowedMimes = [
+                        'image/jpeg', 'image/png', 'image/gif',
+                        'image/webp', 'image/avif', 'image/bmp',
+                        'image/svg+xml', 'image/heic', 'image/heif',
+                    ];
+                    
+                    if (!in_array($value->getMimeType(), $allowedMimes)) {
+                        $fail('The ' . $attribute . ' must be a valid image format.');
+                    }
+                },
+            ],
             'placement'  => 'nullable|string',
             'redirect_url' => 'nullable|url',
             'start_date' => 'nullable|date',

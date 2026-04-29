@@ -34,7 +34,21 @@ class UserProfileController extends Controller
             'unit'             => 'nullable|string',
             'age'              => 'nullable|integer',
             'sex'              => 'nullable|string|max:20',
-            'image'            => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120',
+            'image' => [
+                'nullable',
+                'max:15360',
+                function ($attribute, $value, $fail) {
+                    $allowedMimes = [
+                        'image/jpeg', 'image/png', 'image/gif',
+                        'image/webp', 'image/avif', 'image/bmp',
+                        'image/svg+xml', 'image/heic', 'image/heif',
+                    ];
+                    
+                    if (!in_array($value->getMimeType(), $allowedMimes)) {
+                        $fail('The ' . $attribute . ' must be a valid image format.');
+                    }
+                },
+            ],
             'height'           => 'nullable',
             'weight'           => 'nullable',
             'location'         => 'nullable|string|max:255',

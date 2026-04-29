@@ -27,7 +27,21 @@ class PartnerController extends Controller
             'name'    => 'required|string|max:255',
             'email'   => 'required|email|unique:partners,email',
             'company' => 'nullable|string',
-            'image'   => 'nullable|image|mimes:jpeg,png,jpg,webp|max:2048',
+            'image' => [
+                'nullable',
+                'max:15360',
+                function ($attribute, $value, $fail) {
+                    $allowedMimes = [
+                        'image/jpeg', 'image/png', 'image/gif',
+                        'image/webp', 'image/avif', 'image/bmp',
+                        'image/svg+xml', 'image/heic', 'image/heif',
+                    ];
+                    
+                    if (!in_array($value->getMimeType(), $allowedMimes)) {
+                        $fail('The ' . $attribute . ' must be a valid image format.');
+                    }
+                },
+            ],
         ]);
 
         if ($request->hasFile('image')) {
