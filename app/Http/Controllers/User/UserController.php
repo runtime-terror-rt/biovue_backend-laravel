@@ -150,25 +150,38 @@ class UserController extends Controller
             $startOfWeek = now()->startOfWeek()->toDateString();
             $endOfWeek   = now()->today()->toDateString();
 
-            $activityLogs = DB::table('activity_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->orderBy('log_date', 'desc')->get();
+            $activityLogs  = DB::table('activity_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->orderBy('log_date', 'desc')->get();
             $nutritionLogs = DB::table('user_nutrition_calculates')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
             $hydrationLogs = DB::table('hydration_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
-            $sleepLogs = DB::table('sleep_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
-            $stressLogs = DB::table('stress_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $sleepLogs     = DB::table('sleep_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+            $stressLogs    = DB::table('stress_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
 
-            $latestLog = $activityLogs->first();
-            $activityUnit = ($latestLog && !empty($latestLog->unit)) ? $latestLog->unit : ($user->profile->unit ?? 'imperial');
-            
-            $heightCm = (float)($user->profile->height ?? 0);
-            $rawWeight = ($latestLog && isset($latestLog->weight) && $latestLog->weight > 0) ? (float)$latestLog->weight : (float)($user->profile->weight ?? 0);
+            $latestLog    = $activityLogs->first();
+            $activityUnit = ($latestLog && !empty($latestLog->unit))
+                                ? $latestLog->unit
+                                : ($user->profile->unit ?? 'imperial');
+
+            $profileUnit  = $user->profile->unit ?? 'imperial';
+            $storedHeight = (float)($user->profile->height ?? 0);
+
+            $latestMatchedLog = $activityLogs
+                ->first(fn($log) => !empty($log->unit) && $log->unit === $activityUnit);
+
+            $rawWeight = ($latestMatchedLog && isset($latestMatchedLog->weight) && $latestMatchedLog->weight > 0)
+                            ? (float)$latestMatchedLog->weight
+                            : (float)($user->profile->weight ?? 0);
 
             $bmi = 0;
-            if ($heightCm > 0 && $rawWeight > 0) {
+            if ($storedHeight > 0 && $rawWeight > 0) {
                 if ($activityUnit === 'imperial') {
-                    $heightInches = $heightCm / 2.54;
+                    $heightInches = ($profileUnit === 'imperial')
+                                        ? $storedHeight  
+                                        : $storedHeight / 2.54; 
                     $bmi = ($rawWeight / ($heightInches * $heightInches)) * 703;
                 } else {
-                    $heightMeters = $heightCm / 100;
+                    $heightMeters = ($profileUnit === 'metric')
+                                        ? $storedHeight / 100        
+                                        : $storedHeight * 2.54 / 100;   
                     $bmi = $rawWeight / ($heightMeters * $heightMeters);
                 }
             }
@@ -182,53 +195,106 @@ class UserController extends Controller
             };
 
             $targetWeightRaw = (float)($user->targetGoals->target_weight ?? 0);
-            $targetWeight = $targetWeightRaw; 
+            $targetUnit      = !empty($user->targetGoals->unit)
+                                ? $user->targetGoals->unit
+                                : $activityUnit;
+
+            if ($targetUnit === $activityUnit) {
+                $targetWeight = $targetWeightRaw;
+            } elseif ($activityUnit === 'imperial') {
+                $targetWeight = round($targetWeightRaw * 2.20462, 1); 
+            } else {
+                $targetWeight = round($targetWeightRaw / 2.20462, 1); 
+            }
 
             $weightLabel = $activityUnit === 'imperial' ? ' lbs' : ' kg';
+            $activeDates = collect()
+                ->merge($activityLogs->pluck('log_date'))
+                ->merge($nutritionLogs->pluck('log_date'))
+                ->merge($hydrationLogs->pluck('log_date'))
+                ->merge($sleepLogs->pluck('log_date'))
+                ->merge($stressLogs->pluck('log_date'))
+                ->filter()
+                ->map(fn($d) => \Carbon\Carbon::parse($d)->toDateString())
+                ->unique()
+                ->values();
+
+            $daysActive = $activeDates->count();
 
             $avgSteps = (float)($activityLogs->avg('daily_steps') ?? 0);
-            $stepGoal = (int)($user->targetGoals->daily_step_goal ?? 10000);
-            $avgSleep = $sleepLogs->count() > 0 ? (float)$sleepLogs->avg('sleep_hours') : (float)($activityLogs->avg('sleep_hours') ?? 0);
-            $sleepTarget = (float)($user->targetGoals->sleep_target ?? 8);
-            $avgHydration = $hydrationLogs->count() > 0 ? (float)$hydrationLogs->avg('water_glasses') : (float)($activityLogs->avg('water_glasses') ?? 0);
-            $waterTarget = (float)($user->targetGoals->water_target ?? 8);
-            $daysActive = $activityLogs->unique('log_date')->count();
+
+            $matchedSleepLogs = $sleepLogs->filter(
+                fn($log) => empty($log->unit) || $log->unit === $activityUnit
+            );
+            $avgSleep = $matchedSleepLogs->count() > 0
+                            ? (float)$matchedSleepLogs->avg('sleep_hours')
+                            : (float)($activityLogs->avg('sleep_hours') ?? 0);
+
+            $matchedHydrationLogs = $hydrationLogs->filter(
+                fn($log) => empty($log->unit) || $log->unit === $activityUnit
+            );
+            $avgHydration = $matchedHydrationLogs->count() > 0
+                                ? (float)$matchedHydrationLogs->avg('water_glasses')
+                                : (float)($activityLogs->avg('water_glasses') ?? 0);
+
+            $stepGoal    = (int)($user->targetGoals->daily_step_goal   ?? 10000);
+            $sleepTarget = (float)($user->targetGoals->sleep_target    ?? 8);
+            $waterTarget = (float)($user->targetGoals->water_target    ?? 8);
+
+            // Wellness Score (max 100)
+            $wellnessScore  = 0;
+            $wellnessScore += min(40, ($daysActive   / 7)                    * 40);
+            $wellnessScore += min(25, ($avgSteps     / max($stepGoal,    1)) * 25);
+            $wellnessScore += min(20, ($avgSleep     / max($sleepTarget, 1)) * 20);
+            $wellnessScore += min(15, ($avgHydration / max($waterTarget, 1)) * 15);
+            $wellnessScore  = min(100, (int)round($wellnessScore));
 
             return response()->json([
                 'success' => true,
-                'data' => [
+                'data'    => [
                     'summary' => [
-                        'wellness_score' => 0,
-                        'days_active' => $daysActive . '/7',
-                        'data_logged_entries' => ($activityLogs->count() + $nutritionLogs->count() + $hydrationLogs->count() + $sleepLogs->count() + $stressLogs->count()),
+                        'wellness_score'      => $wellnessScore,
+                        'logs_summary' => [
+                            'activity_days'   => $daysActive . '/7',
+                        ],
+                        'data_logged_entries' => $activityLogs->count()
+                                            + $nutritionLogs->count()
+                                            + $hydrationLogs->count()
+                                            + $sleepLogs->count()
+                                            + $stressLogs->count(),
                     ],
                     'health_overview' => [
                         'weight' => [
-                            'current' => round($rawWeight, 1) . $weightLabel,
-                            'status' => ($targetWeight > 0 && $rawWeight > $targetWeight) ? 'Above target' : 'On track',
+                            'current'      => round($rawWeight, 1) . $weightLabel,
+                            'status'       => ($targetWeight > 0 && $rawWeight > $targetWeight)
+                                                ? 'Above target' : 'On track',
                             'coach_target' => $targetWeight . $weightLabel,
                         ],
                         'bmi' => [
-                            'current' => round($bmi, 1),
-                            'status' => $bmiStatus,
+                            'current'     => round($bmi, 1),
+                            'status'      => $bmiStatus,
                             'ideal_range' => '18.5 - 24.9',
                         ],
                         'nutrition' => [
                             'total_calories' => round($nutritionLogs->sum('calories_value'), 2),
+                            'total_protein'  => round($nutritionLogs->sum('protein_value'),  2),
+                            'total_carbs'    => round($nutritionLogs->sum('carbs_value'),    2),
+                            'total_fat'      => round($nutritionLogs->sum('fat_value'),      2),
                         ],
                         'daily_steps' => [
-                            'current' => number_format((int)round($avgSteps)),
+                            'current'    => number_format((int)round($avgSteps)),
                             'coach_plan' => number_format($stepGoal) . ' steps',
                         ],
                         'sleep_hours' => [
-                            'current' => round($avgSleep, 1) . ' Hrs',
+                            'current'    => round($avgSleep, 1) . ' Hrs',
                             'coach_plan' => $sleepTarget . ' Hrs',
                         ],
                         'hydration' => [
-                            'current_glasses' => round($avgHydration, 1),
-                            'target' => $waterTarget . ' glasses',
+                            'current' => round($avgHydration, 1),
+                            'target'  => $waterTarget . ' glasses',
                         ],
                         'stress_and_mood' => [
+                            'latest_mood'      => ucfirst($stressLogs->last()->mood ?? 'stable'),
                             'avg_stress_level' => round($stressLogs->avg('stress_level') ?? 0, 1),
                         ],
                     ],
@@ -238,7 +304,7 @@ class UserController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => $e->getMessage(),
+                'message' => 'Error generating report: ' . $e->getMessage(),
             ], 500);
         }
     }
