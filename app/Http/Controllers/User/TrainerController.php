@@ -307,25 +307,50 @@ class TrainerController extends Controller
             return redirect()->to('https://biovuedigitalwellness.com/register?error=user_not_found');
         }
 
-        $user->update([
-            'status' => 'active', 
-            'terms_accepted' => 1, 
-            'user_type' => 'individual',
-            'email_verified_at' => now()
-        ]);
+        try {
+            return \Illuminate\Support\Facades\DB::transaction(function () use ($invitation, $user) {
+                
+                $user->update([
+                    'status' => 'active', 
+                    'terms_accepted' => 1, 
+                    'user_type' => 'individual',
+                    'email_verified_at' => now()
+                ]);
 
-        $user->syncRoles(['individual']); 
+                $user->syncRoles(['individual']); 
 
-        \Illuminate\Support\Facades\DB::table('connect_user_proffesions')->updateOrInsert(
-            ['profession_id' => $invitation->trainer_id, 'user_id' => $user->id],
-            ['created_at' => now(), 'updated_at' => now()]
-        );
+                \Illuminate\Support\Facades\DB::table('connect_user_proffesions')->updateOrInsert(
+                    ['profession_id' => $invitation->trainer_id, 'user_id' => $user->id],
+                    ['created_at' => now(), 'updated_at' => now()]
+                );
 
-        $invitation->update(['status' => 'accepted']);
-        
-        ProjectionCredit::where('user_id', $invitation->trainer_id)->decrement('member_limit');
+                $trainerCredit = ProjectionCredit::where('user_id', $invitation->trainer_id)->first();
 
-        return redirect()->to('https://biovuedigitalwellness.com/login?message=Account+activated+successfully');
+                if ($trainerCredit && $trainerCredit->projection_limit >= 2) {
+                    
+                    $trainerCredit->decrement('projection_limit', 2);
+                    $trainerCredit->decrement('member_limit', 1);
+
+                    ProjectionCredit::updateOrCreate(
+                        ['user_id' => $user->id],
+                        [
+                            'projection_limit' => 4,
+                            'expiry_date'     => $trainerCredit->expiry_date,
+                            'created_at'      => now(),
+                            'updated_at'      => now()
+                        ]
+                    );
+                }
+
+                $invitation->update(['status' => 'accepted']);
+
+                return redirect()->to('https://biovuedigitalwellness.com/login?message=Account+activated+successfully');
+            });
+            
+        } catch (\Exception $e) {
+            \Log::error("Accept Invitation Error: " . $e->getMessage());
+            return redirect()->to('https://biovuedigitalwellness.com/login?error=Something+went+wrong');
+        }
     }
 
     private function generateStrongPassword()
