@@ -334,7 +334,7 @@ class TrainerController extends Controller
                     ProjectionCredit::updateOrCreate(
                         ['user_id' => $user->id],
                         [
-                            'projection_limit' => 4,
+                            'projection_limit' => 2,
                             'expiry_date'     => $trainerCredit->expiry_date,
                             'created_at'      => now(),
                             'updated_at'      => now()
