@@ -26,6 +26,11 @@ RUN docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip
 # Get latest Composer (PHP package manager)
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+RUN echo "upload_max_filesize = 100M" > /usr/local/etc/php/conf.d/uploads.ini \
+ && echo "post_max_size = 100M" >> /usr/local/etc/php/conf.d/uploads.ini \
+ && echo "memory_limit = 256M" >> /usr/local/etc/php/conf.d/uploads.ini \
+ && echo "max_execution_time = 300" >> /usr/local/etc/php/conf.d/uploads.ini
+
 # Copy existing application directory contents
 COPY . /var/www/html
 
