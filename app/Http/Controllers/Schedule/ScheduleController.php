@@ -17,6 +17,8 @@ class ScheduleController extends Controller
 {
     public function index(Request $request)
     {
+        $trainerId = auth()->id(); 
+
         $date = $request->query('date', Carbon::today()->toDateString());
 
         $schedules = Schedule::with(['client' => function($query) {
@@ -24,10 +26,7 @@ class ScheduleController extends Controller
                 $q->select('user_id', 'image');
             }]);
         }])
-        // ->whereBetween('schedule_date', [
-        //     Carbon::parse($date)->startOfWeek(),
-        //     Carbon::parse($date)->endOfWeek()
-        // ])
+        ->where('trainer_id', $trainerId) 
         ->get();
 
         return response()->json([
