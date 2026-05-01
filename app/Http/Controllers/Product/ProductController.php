@@ -337,7 +337,6 @@ class ProductController extends Controller
                 'message' => 'Products uploaded successfully!'
             ]);
         } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
-            // ভ্যালিডেশন ফেইল করলে (যেমন নাম না থাকলে) এটি মেসেজ দিবে
             return response()->json([
                 'success' => false,
                 'message' => 'Validation error',
@@ -355,7 +354,6 @@ class ProductController extends Controller
     {
         $callback = function() {
             $file = fopen('php://output', 'w');
-            // সঠিক হেডার যা ইম্পোর্ট ক্লাসের সাথে মিলবে
             fputcsv($file, ["name", "description", "category", "price", "redirect_url", "status", "image"]);
             fputcsv($file, ["Sample Product", "Description", "fitness", "99.99", "https://link.com", "draft", "https://images.unsplash.com/photo-1593095191071-82b63ad0010d?w=400"]);
             fclose($file);
