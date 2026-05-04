@@ -13,7 +13,10 @@ class DatabaseSeeder extends Seeder
         // 1. Roles and Terms
         $this->call([
             RolesTableSeeder::class,
+            PrivacyPolicySeeder::class,
             TermsAndConditionSeeder::class,
+            FaqSeeder::class,
+
         ]);
 
         // 2. Admin User
