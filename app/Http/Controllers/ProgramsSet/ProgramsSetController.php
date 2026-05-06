@@ -378,15 +378,21 @@ public function assignUsers(Request $request)
             $userPrograms = DB::table('connect_to_professions')
                 ->where('connect_to_professions.user_id', $targetUserId)
                 ->join('programs_sets', 'connect_to_professions.program_set_id', '=', 'programs_sets.id')
+                ->join('users as creators', 'programs_sets.profession_id', '=', 'creators.id') 
                 ->select(
                     'programs_sets.id as program_id',
-                    'programs_sets.name',
+                    'programs_sets.name as program_name',
                     'programs_sets.duration',
                     'programs_sets.primary_goal',
                     'programs_sets.target_intensity',
+                    'creators.name as created_by',
                     'connect_to_professions.created_at as assigned_date'
                 )
-                ->get();
+                ->get()
+                ->map(function($program) {
+                    $program->assigned_date = \Carbon\Carbon::parse($program->assigned_date)->format('M d, Y');
+                    return $program;
+                });
 
             return response()->json([
                 'success' => true,

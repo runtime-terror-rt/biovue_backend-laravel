@@ -7,7 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ReminderNotification extends Notification
+class ReminderNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -25,11 +25,31 @@ class ReminderNotification extends Notification
     }
 
 
+    /**
+     * Get the notification's delivery channels.
+     */
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
     }
 
+    /**
+     * Get the mail representation of the notification.
+     */
+    public function toMail($notifiable): MailMessage
+    {
+        return (new MailMessage)
+            ->subject($this->title)
+            ->greeting('Hello ' . $notifiable->name . '!')
+            ->line('You have received a new reminder.')
+            ->line('Message: ' . $this->message)
+            ->action('Check Dashboard', url('https://biovuedigitalwellness.com'))
+            ->line('Thank you for using our application!');
+    }
+
+    /**
+     * Get the array representation of the notification.
+     */
     public function toDatabase($notifiable)
     {
         return [

@@ -992,6 +992,7 @@ class UserController extends Controller
                     'activityLogs' => fn($q) => $q->latest('log_date'),
                     'projectionCredits'
                 ])
+                ->withPivot('created_at as connected_at') 
                 ->withCount('projectionDatas')
                 ->get()
                 ->map(function($user) {
@@ -1011,6 +1012,9 @@ class UserController extends Controller
                         'projection_used' => "{$used}/{$limit}", 
                         'status'          => ($diff === null || $diff >= 3) ? 'Need attention' : 'On track',
                         'activity'        => $this->resolveActivityText($diff, $lastLogDate),
+                        'connected_at' => ($user->pivot && $user->pivot->created_at) 
+                            ? \Carbon\Carbon::parse($user->pivot->created_at)->format('M d, Y') 
+                            : 'N/A',
                     ];
                 });
 

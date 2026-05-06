@@ -132,16 +132,15 @@ class ScheduleController extends Controller
             'client_id' => $request->client_id,
             'reminder_type' => $request->reminder_type,
             'message' => $request->message,
-            'push_notification' => $request->push_notification ?? false
         ]);
 
         $client = User::find($request->client_id);
-//        $client->notify(new ReminderNotification($reminder));
-        $client->notify(new ReminderNotification('new Reminder',$request->message ?? 'Doing Great','reminder_message'));
 
-        if ($request->push_notification) {
-            $this->sendPushNotification($request->client_id, $request->message);
-        }
+        $client->notify(new ReminderNotification(
+            'New Reminder', 
+            $request->message, 
+            $request->reminder_type
+        ));
 
         return response()->json(['message' => 'Reminder sent successfully']);
     }
