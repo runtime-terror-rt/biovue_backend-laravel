@@ -992,7 +992,7 @@ class UserController extends Controller
                     'activityLogs' => fn($q) => $q->latest('log_date'),
                     'projectionCredits'
                 ])
-                ->withCount('projections')
+                ->withCount('projectionDatas')
                 ->get()
                 ->map(function($user) {
                     $latestLog = $user->activityLogs->first();
@@ -1001,7 +1001,7 @@ class UserController extends Controller
                     $diff = $lastLogDate ? now()->startOfDay()->diffInDays($lastLogDate->startOfDay()) : null;
 
                     $goalData = $user->targetGoals; 
-                    $used = $user->projections_count ?? 0;
+                    $used = $user->projection_datas_count ?? 0;
                     $limit = $user->projectionCredits->projection_limit ?? 0;
                     
                     return [

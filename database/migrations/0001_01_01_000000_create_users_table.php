@@ -30,7 +30,7 @@ return new class extends Migration
             ])->nullable();
             $table->integer('turning_possibility')->default(0);
             $table->boolean('is_active')->default(true);
-            $table->boolean('is_invited')->default(true);
+            $table->boolean('is_invited')->default(false);
             $table->string('g-recaptcha-response')->nullable();
             $table->rememberToken();
             $table->timestamps();

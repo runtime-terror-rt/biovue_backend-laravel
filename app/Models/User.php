@@ -202,6 +202,11 @@ class User extends Authenticatable
         return $this->hasMany(Projection::class, 'user_id');
     }
 
+    public function projectionDatas()
+    {
+        return $this->hasMany(ProjectionData::class, 'user_id');
+    }
+
     public function projectionCredits() 
     {
         return $this->hasOne(ProjectionCredit::class, 'user_id');
@@ -216,4 +221,5 @@ class User extends Authenticatable
     {
         return $this->hasMany(UserDevice::class, 'user_id', 'id');
     }
+
 }
