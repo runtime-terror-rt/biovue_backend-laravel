@@ -189,6 +189,7 @@ class User extends Authenticatable
     public function myClients()
     {
         return $this->belongsToMany(User::class, 'connect_user_proffesions', 'profession_id', 'user_id')
+                    ->withPivot('created_at')
                     ->withTimestamps();
     }
 
