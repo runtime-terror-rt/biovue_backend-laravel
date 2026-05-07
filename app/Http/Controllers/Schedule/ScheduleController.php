@@ -89,6 +89,7 @@ class ScheduleController extends Controller
         ]);
 
         try {
+            $isUpdate = $request->id ? true : false;
             $schedule = Schedule::updateOrCreate(
                 ['id' => $request->id], 
                 [
@@ -102,7 +103,10 @@ class ScheduleController extends Controller
                 ]
             );
 
-            $message = $request->id ? 'Schedule updated successfully' : 'Check-in scheduled successfully';
+            $client = \App\Models\User::find($validated['client_id']);
+            $statusType = $isUpdate ? 'updated' : 'created';
+            $client->notify(new \App\Notifications\ScheduleNotification($schedule, $statusType));
+            $message = $isUpdate ? 'Schedule updated successfully' : 'Check-in scheduled successfully';
 
             return response()->json([
                 'success' => true,
