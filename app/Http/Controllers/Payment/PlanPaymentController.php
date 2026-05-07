@@ -82,10 +82,16 @@ class PlanPaymentController extends Controller
         $plan = Plan::findOrFail($request->plan_id);
         $user = auth()->user();
 
-        // Price Calculation
         $finalPrice = $plan->price;
+        $interval = 'month';
+        if ($plan->plan_type === 'individual') {
         if ($request->billing === 'annual') {
             $finalPrice = $plan->price * 12 * 0.9; // 10% Discount
+                $interval = 'year';
+            }
+        } else {
+            $finalPrice = $plan->price; 
+            $interval = 'month';
         }
 
         try {
@@ -117,10 +123,10 @@ class PlanPaymentController extends Controller
                         'currency'     => 'usd',
                         'unit_amount'  => (int)($finalPrice * 100),
                         'recurring'    => [
-                            'interval' => $request->billing === 'annual' ? 'year' : 'month',
+                            'interval' => $interval,
                         ],
                         'product_data' => [
-                            'name' => $plan->name,
+                            'name' => $plan->name . ($plan->plan_type === 'professional' ? " (Monthly Installment)" : ""),
                         ],
                     ],
                     'quantity' => 1,
@@ -128,6 +134,7 @@ class PlanPaymentController extends Controller
                 'metadata' => [
                     'payment_id'       => $payment->id,
                     'user_id'          => $user->id,
+                    'plan_type'         => $plan->plan_type,
                     'meter_id'         => $request->meter_id ?? null,
                     'meter_event_name' => $request->meter_event_name ?? null,
                 ],
@@ -142,6 +149,7 @@ class PlanPaymentController extends Controller
                 'checkout_url' => $session->url,
                 'session_id'   => $session->id,
                 'amount'       => $finalPrice,
+                'billing_type' => $interval === 'year' ? 'One-time Annual' : 'Recurring Monthly',
             ]);
 
         } catch (\Exception $e) {
