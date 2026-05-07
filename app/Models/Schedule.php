@@ -14,4 +14,10 @@ class Schedule extends Model
     public function client() {
         return $this->belongsTo(User::class, 'client_id');
     }
+
+    public function trainer()
+    {
+        return $this->belongsTo(User::class, 'trainer_id');
+    }
+    
 }

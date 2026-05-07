@@ -222,6 +222,7 @@ Route::prefix('v1')->group(function () {
         Route::get('get-card-data', [UserController::class, 'getDashboardData']);
 
         Route::get('/calendar-schedules', [ScheduleController::class, 'index']);
+        Route::get('/my-schedules', [ScheduleController::class, 'getUserSchedules']);
         Route::post('/schedule-checkin', [ScheduleController::class, 'storeOrUpdateSchedule']);
         Route::post('/send-reminder', [ScheduleController::class, 'sendReminder']);
         Route::get('/my-reminders', [ScheduleController::class, 'getMyReminders']);

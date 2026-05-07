@@ -34,6 +34,37 @@ class ScheduleController extends Controller
             'data' => $schedules
         ]);
     }
+
+    public function getUserSchedules(Request $request)
+    {
+        try {
+            $user = auth()->user();
+
+            $schedules = \App\Models\Schedule::where('client_id', $user->id)
+                ->with(['trainer' => function($query) {
+                    $query->select('id', 'name')->with(['profile' => function($q) {
+                        $q->select('user_id', 'image');
+                    }]);
+                }])
+                ->orderBy('schedule_date', 'desc') 
+                ->orderBy('schedule_time', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'total'   => $schedules->count(),
+                'data'    => $schedules
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch schedules',
+                'error'   => $e->getMessage()
+            ], 500);
+        }
+    }
+    
     // public function index(Request $request)
     // {
     //     try {
