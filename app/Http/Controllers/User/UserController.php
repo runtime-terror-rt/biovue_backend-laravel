@@ -1085,13 +1085,15 @@ class UserController extends Controller
                 return response()->json(['success' => false, 'message' => 'Professional configuration not found.'], 404);
             }
 
-            if ($creditRecord->member_limit <= 0) {
+            if ($user->is_invited != 0 && $creditRecord->member_limit <= 0) {
                 return response()->json(['success' => false, 'message' => 'This professional has reached their maximum member limit.'], 400);
             }
 
             $user->myProfessionals()->syncWithoutDetaching([$professionId]);
 
+            if ($user->is_invited != 0) {
             $creditRecord->decrement('member_limit');
+            }
 
             $connectedUser = User::with('profile')->find($professionId);
 
