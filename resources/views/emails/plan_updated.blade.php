@@ -14,10 +14,10 @@
             padding: 40px;
             border-radius: 10px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            text-align: left; /* লেখা বাম দিক থেকে শুরু হবে */
+            text-align: left; 
         }
         .logo-container {
-            text-align: center; /* শুধু লোগোটি মাঝখানে থাকবে */
+            text-align: center; 
             margin-bottom: 30px;
         }
         .logo {
@@ -36,7 +36,7 @@
             margin-bottom: 15px;
         }
         .button-wrapper {
-            text-align: center; /* বাটনটি মাঝখানে রাখার জন্য */
+            text-align: center; 
             margin: 30px 0;
         }
         .btn {

@@ -18,6 +18,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade'); 
             $table->enum('billing_cycle', ['days', 'monthly', 'half_annual', 'annual', 'custom']);
             $table->decimal('price', 10, 2)->default(0.00);
+            $table->string('stripe_price_id')->nullable();
             $table->integer('duration')->nullable(); 
             $table->integer('member_limit')->nullable(); 
             $table->json('features')->nullable();
