@@ -45,16 +45,19 @@
             <p>Your trainer has <strong>{{ $status_type }}</strong> a check-in session for you. Here are the details:</p>
             
             <div class="details-box">
-                <p>📅 **Date:** {{ $schedule->schedule_date }}</p>
-                <p>⏰ **Time:** {{ $schedule->schedule_time }}</p>
-                <p>📋 **Type:** {{ ucfirst($schedule->check_in_type) }}</p>
+                <p><strong>📅 **Date:**</strong> {{ $schedule->schedule_date }}</p>
+                <p><strong>⏰ **Time:**</strong> {{ $schedule->schedule_time }}</p>
+                <p><strong>📋 **Type:**</strong> {{ ucfirst($schedule->check_in_type) }}</p>
             </div>
 
             <p style="text-align: center;">
-                <a href="https://biovuedigitalwellness.com/user-dashboard" class="button">View Dashboard</a>
+                <a href="https://biovuedigitalwellness.com/user-dashboard" class="btn">View Dashboard</a>
             </p>
 
-            <p>Please make sure to be available on time. Thank you for being with us!</p>
+            <p style="margin-top: 30px; color: #333;">
+                Regards,<br>
+                <strong>BioVue Team</strong>
+            </p>
         </div>
         <div class="footer">
             &copy; {{ date('Y') }} BioVue Digital Wellness. All rights reserved.

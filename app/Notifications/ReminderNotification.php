@@ -40,10 +40,10 @@ class ReminderNotification extends Notification implements ShouldQueue
     {
         return (new MailMessage)
             ->subject($this->title)
-            ->view('emails.remindersend', [ 
+            ->view('emails.sendreminder', [ 
                 'notifiable' => $notifiable,
                 'title' => $this->title,
-                'message' => $this->message,
+                'reminder_body' => $this->message,
                 'type' => $this->type,
             ]);
     }
