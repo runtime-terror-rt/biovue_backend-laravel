@@ -40,11 +40,12 @@ class ReminderNotification extends Notification implements ShouldQueue
     {
         return (new MailMessage)
             ->subject($this->title)
-            ->greeting('Hello ' . $notifiable->name . '!')
-            ->line('You have received a new reminder.')
-            ->line('Message: ' . $this->message)
-            ->action('Check Dashboard', url('https://biovuedigitalwellness.com'))
-            ->line('Thank you for using our application!');
+            ->view('emails.remindersend', [ 
+                'notifiable' => $notifiable,
+                'title' => $this->title,
+                'message' => $this->message,
+                'type' => $this->type,
+            ]);
     }
 
     /**

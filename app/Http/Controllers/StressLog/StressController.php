@@ -50,7 +50,7 @@ class StressController extends Controller
 
         $user = Auth::user();
 
-        $user->notify(new ReminderNotification('New Stress Logs', 'Stress Logs Added on '.$request->log_date .' ','reminder_message'));
+        // $user->notify(new ReminderNotification('New Stress Logs', 'Stress Logs Added on '.$request->log_date .' ','reminder_message'));
 
         return response()->json([
             'success' => true,

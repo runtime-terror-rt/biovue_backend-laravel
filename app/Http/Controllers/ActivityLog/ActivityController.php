@@ -45,7 +45,7 @@ class ActivityController extends Controller
         $status = $activity->wasRecentlyCreated ? 201 : 200;
         $message = $activity->wasRecentlyCreated ? 'Activity log created.' : 'Activity log updated.';
 
-        $user->notify(new ReminderNotification('New Logs', 'Logs Added on '.$request->log_date .' ','reminder_message'));
+        // $user->notify(new ReminderNotification('New Logs', 'Logs Added on '.$request->log_date .' ','reminder_message'));
 
         return response()->json([
             'success' => true,

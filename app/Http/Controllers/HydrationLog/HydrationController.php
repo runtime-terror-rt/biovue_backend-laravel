@@ -47,7 +47,7 @@ class HydrationController extends Controller
         $status = $activity->wasRecentlyCreated ? 201 : 200;
         $message = $activity->wasRecentlyCreated ? 'Hydration log created' : 'Hydration log updated';
 
-        $user->notify(new ReminderNotification('New Hydration Logs', 'Hydration Logs Added on '.$request->log_date .' ','reminder_message'));
+        // $user->notify(new ReminderNotification('New Hydration Logs', 'Hydration Logs Added on '.$request->log_date .' ','reminder_message'));
 
 
 

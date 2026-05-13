@@ -28,7 +28,7 @@ class SleepController extends Controller
 
         $user = Auth::user();
 
-        $user->notify(new ReminderNotification('New Sleep Logs', 'Sleep Logs Added on '.$request->log_date .' ','reminder_message'));
+        // $user->notify(new ReminderNotification('New Sleep Logs', 'Sleep Logs Added on '.$request->log_date .' ','reminder_message'));
 
         return response()->json($activity, 201);
 

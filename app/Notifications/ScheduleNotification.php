@@ -1,12 +1,12 @@
 <?php
 
 namespace App\Notifications;
-
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
 use Illuminate\Notifications\Messages\MailMessage;
 
-class ScheduleNotification extends Notification
+class ScheduleNotification extends Notification implements ShouldQueue
 {
     use Queueable;
 
@@ -30,13 +30,12 @@ class ScheduleNotification extends Notification
 
         return (new MailMessage)
             ->subject($subject)
-            ->greeting('Hello ' . $notifiable->name . '!')
-            ->line('Your trainer has ' . $this->status_type . ' a check-in for you.')
-            ->line('**Date:** ' . $this->schedule->schedule_date)
-            ->line('**Time:** ' . $this->schedule->schedule_time)
-            ->line('**Type:** ' . $this->schedule->check_in_type)
-            ->action('View Dashboard', url('https://biovuedigitalwellness.com/user-dashboard'))
-            ->line('Thank you for being with BioVue!');
+            ->view('emails.schedule', [
+                'notifiable' => $notifiable,
+                'schedule' => $this->schedule,
+                'status_type' => $this->status_type,
+                'subject' => $subject
+            ]);
     }
 
     public function toArray($notifiable)
@@ -48,3 +47,4 @@ class ScheduleNotification extends Notification
         ];
     }
 }
+
