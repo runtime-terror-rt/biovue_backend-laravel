@@ -187,7 +187,7 @@ Route::prefix('v1')->group(function () {
 
 
         // Admin Route: Create/Update Terms & Conditions
-        Route::post('terms', [TermsAndConditionController::class, 'save']);
+        Route::post('terms-create', [TermsAndConditionController::class, 'save']);
 
         Route::post('logout', [LoginController::class, 'logout']);
 
