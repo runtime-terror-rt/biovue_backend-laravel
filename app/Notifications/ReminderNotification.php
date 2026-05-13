@@ -3,39 +3,29 @@
 namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class ReminderNotification extends Notification implements ShouldQueue
+class ReminderNotification extends Notification
 {
     use Queueable;
 
     public $title;
-    public $message;
+    public $reminder_content;
     public $type;
-    /**
-     * Create a new notification instance.
-     */
+
     public function __construct($title, $message, $type)
     {
         $this->title = $title;
-        $this->message = $message;
+        $this->reminder_content = $message;
         $this->type = $type;
     }
 
-
-    /**
-     * Get the notification's delivery channels.
-     */
     public function via(object $notifiable): array
     {
         return ['database', 'mail'];
     }
 
-    /**
-     * Get the mail representation of the notification.
-     */
     public function toMail($notifiable): MailMessage
     {
         return (new MailMessage)
@@ -43,21 +33,17 @@ class ReminderNotification extends Notification implements ShouldQueue
             ->view('emails.sendreminder', [ 
                 'notifiable' => $notifiable,
                 'title' => $this->title,
-                'reminder_body' => $this->message,
+                'body' => $this->reminder_content,
                 'type' => $this->type,
             ]);
     }
 
-    /**
-     * Get the array representation of the notification.
-     */
     public function toDatabase($notifiable)
     {
         return [
             'title' => $this->title,
-            'message' => $this->message,
+            'message' => $this->reminder_content,
             'type' => $this->type,
         ];
     }
-
 }

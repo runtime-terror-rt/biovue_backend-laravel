@@ -48,7 +48,7 @@
             
             <div style="padding: 20px; background: #f4f4f4; border-radius: 5px;">
                 <h3>{{ $title }}</h3>
-                <p>{{ $message }}</p>
+                <p>{{ $body }}</p>
                 <p>Type: <strong>{{ ucfirst($type) }}</strong></p>
             </div>
 
