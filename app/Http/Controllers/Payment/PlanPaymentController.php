@@ -86,22 +86,11 @@ class PlanPaymentController extends Controller
         $finalPrice = $plan->price;
         $interval = 'month';
 
-        if ($plan->plan_type === 'individual') {
+        if ($plan->plan_type === 'individual' || $plan->plan_type === 'api') {
             if ($request->billing === 'annual') {
                 $finalPrice = $plan->price * 12 * 0.9; // 10% Discount
                 $interval = 'year';
             }
-        } elseif ($plan->plan_type === 'api') {
-            if ($request->billing === 'annual') {
-                $finalPrice = $plan->price * 12 * 0.9; 
-                $interval = 'year';
-            } else {
-                $finalPrice = $plan->price; 
-                $interval = 'month';
-            }
-        } else {
-            $finalPrice = $plan->price; 
-            $interval = 'month';
         }
 
         try {
@@ -148,12 +137,17 @@ class PlanPaymentController extends Controller
                     ],
                     'quantity' => 1,
                 ]],
+                'subscription_data' => [
+                    'metadata' => [
+                        'payment_id'       => $payment->id,
+                        'user_id'          => $user->id,
+                        'plan_type'        => $plan->plan_type,
+                        'meter_id'         => $request->meter_id ?? '',
+                        'meter_event_name' => $request->meter_event_name ?? '',
+                    ]
+                ],
                 'metadata' => [
-                    'payment_id'       => $payment->id,
-                    'user_id'          => $user->id,
-                    'plan_type'        => $plan->plan_type,
-                    'meter_id'         => $request->meter_id ?? null,
-                    'meter_event_name' => $request->meter_event_name ?? null,
+                    'payment_id' => $payment->id,
                 ],
                 'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url'  => url('/api/v1/payment/cancel'),
@@ -196,7 +190,7 @@ class PlanPaymentController extends Controller
 
         $user->update(['plan_id' => $plan->id]);
 
-        if ($plan->plan_type === 'api') {
+        if ($plan && $plan->plan_type === 'api') {
             DB::table('external_apis')->updateOrCreate(
                 ['user_id' => $user->id],
                 [
@@ -245,8 +239,7 @@ class PlanPaymentController extends Controller
 
             DB::beginTransaction();
             try {
-                $payment = $paymentId ? PlanPayment::with(['user', 'plan'])->find($paymentId) : 
-                        PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
+                $payment = $paymentId ? PlanPayment::with(['user', 'plan'])->find($paymentId) : PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
 
                 if ($payment && $payment->status !== 'paid') {
                     $subId = $session->subscription;
@@ -281,13 +274,16 @@ class PlanPaymentController extends Controller
                         ]
                     );
 
-                   $this->activateSubscription($payment, $payment->user, $payment->plan, $subId);
+                    $this->activateSubscription($payment, $payment->user, $payment->plan, $subId);
                     
-                    $admin = User::find(1);
-                    if ($admin) $admin->notify(new AdminNotification('New Subscription', "{$payment->user->name} onboarded", 'subscription'));
-                    $payment->user->notify(new SubscriptionNotification('Success', 'Your subscription is active', 'subscription'));
+                    try {
+                        $admin = User::find(1);
+                        if ($admin) $admin->notify(new AdminNotification('New Subscription', "{$payment->user->name} onboarded", 'subscription'));
+                        if ($payment->user) $payment->user->notify(new SubscriptionNotification('Success', 'Your subscription is active', 'subscription'));
+                    } catch (\Exception $ne) {
+                        Log::error('Webhook Notification Error: ' . $ne->getMessage());
+                    }
 
-                    $payment->update(['status' => 'paid']);
                     Log::info('Webhook processed successfully for Payment ID: ' . $payment->id);
                 }
                 DB::commit();
