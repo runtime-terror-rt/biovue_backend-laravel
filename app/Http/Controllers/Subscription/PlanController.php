@@ -68,7 +68,7 @@ class PlanController extends Controller
         $request->validate([
             'id'               => 'nullable|integer|exists:plans,id',
             'name'             => 'required|string|max:255',
-            'plan_type'        => 'required|in:individual,professional',
+            'plan_type'        => 'required|in:individual,professional,api',
             'billing_cycle'    => 'required|in:days,monthly,half_annual,annual,custom',
             'price'            => 'required|numeric|min:0',
             'duration'         => 'nullable|integer',
