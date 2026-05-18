@@ -13,6 +13,7 @@ use App\Models\ProjectionCredit;
 use Stripe\StripeClient;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PlanPaymentController extends Controller
 {
@@ -84,10 +85,19 @@ class PlanPaymentController extends Controller
 
         $finalPrice = $plan->price;
         $interval = 'month';
+
         if ($plan->plan_type === 'individual') {
-        if ($request->billing === 'annual') {
-            $finalPrice = $plan->price * 12 * 0.9; // 10% Discount
+            if ($request->billing === 'annual') {
+                $finalPrice = $plan->price * 12 * 0.9; // 10% Discount
                 $interval = 'year';
+            }
+        } elseif ($plan->plan_type === 'api') {
+            if ($request->billing === 'annual') {
+                $finalPrice = $plan->price * 12 * 0.9; 
+                $interval = 'year';
+            } else {
+                $finalPrice = $plan->price; 
+                $interval = 'month';
             }
         } else {
             $finalPrice = $plan->price; 
@@ -116,8 +126,15 @@ class PlanPaymentController extends Controller
 
             $stripe = new StripeClient(config('services.stripe.secret'));
 
+            $productName = $plan->name;
+            if ($plan->plan_type === 'professional') {
+                $productName .= " (Monthly Installment)";
+            } elseif ($plan->plan_type === 'api') {
+                $productName .= " (API Access Plan)";
+            }
+
             $session = $stripe->checkout->sessions->create([
-                'mode' => 'subscription', // Change to 'subscription' if using Stripe Products/Prices for recurring
+                'mode' => 'subscription', 
                 'line_items' => [[
                     'price_data' => [
                         'currency'     => 'usd',
@@ -126,7 +143,7 @@ class PlanPaymentController extends Controller
                             'interval' => $interval,
                         ],
                         'product_data' => [
-                            'name' => $plan->name . ($plan->plan_type === 'professional' ? " (Monthly Installment)" : ""),
+                            'name' => $productName,
                         ],
                     ],
                     'quantity' => 1,
@@ -134,7 +151,7 @@ class PlanPaymentController extends Controller
                 'metadata' => [
                     'payment_id'       => $payment->id,
                     'user_id'          => $user->id,
-                    'plan_type'         => $plan->plan_type,
+                    'plan_type'        => $plan->plan_type,
                     'meter_id'         => $request->meter_id ?? null,
                     'meter_event_name' => $request->meter_event_name ?? null,
                 ],
@@ -159,7 +176,7 @@ class PlanPaymentController extends Controller
     }
 
     /**
-     * Helper to activate credits/plan
+     * Helper to activate credits/plan & handle API configurations
      */
     protected function activateSubscription($payment, $user, $plan, $subscriptionId = null)
     {
@@ -167,21 +184,38 @@ class PlanPaymentController extends Controller
         if ($payment->billing === 'annual') $duration = 365;
         if ($payment->billing === 'half_annual') $duration = 180;
 
+        $startDate = now();
+        $endDate = now()->addDays($duration);
+
         $payment->update([
             'status' => 'paid',
             'stripe_subscription_id' => $subscriptionId,
-            'paid_at' => now(),
-            'end_date' => now()->addDays($duration),
+            'paid_at' => $startDate,
+            'end_date' => $endDate,
         ]);
 
         $user->update(['plan_id' => $plan->id]);
+
+        if ($plan->plan_type === 'api') {
+            DB::table('external_apis')->updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                   'api_key'          => DB::table('external_apis')->where('user_id', $user->id)->value('api_key') ?? 'bv_' . Str::random(60),
+                    'projection_limit' => $plan->projection_limit ?? 0, 
+                    'insite_limit'     => $plan->member_limit ?? 0,
+                    'start_date'       => $startDate,
+                    'end_date'         => $endDate,
+                    'updated_at'       => now(),
+                ]
+            );
+        }
 
         ProjectionCredit::updateOrCreate(
             ['user_id' => $user->id],
             [
                 'projection_limit' => $plan->projection_limit,
                 'member_limit'     => $plan->member_limit,
-                'expiry_date'       => now()->addDays($duration),
+                'expiry_date'      => $endDate,
                 'updated_at'       => now(),
             ]
         );
@@ -190,7 +224,6 @@ class PlanPaymentController extends Controller
     /**
      * Stripe Webhook
      */
-
     public function handleStripeWebhook(Request $request)
     {
         $payload = $request->getContent();
@@ -248,7 +281,7 @@ class PlanPaymentController extends Controller
                         ]
                     );
 
-                    $this->activateSubscription($payment, $payment->user, $payment->plan, $subId);
+                   $this->activateSubscription($payment, $payment->user, $payment->plan, $subId);
                     
                     $admin = User::find(1);
                     if ($admin) $admin->notify(new AdminNotification('New Subscription', "{$payment->user->name} onboarded", 'subscription'));
@@ -300,15 +333,12 @@ class PlanPaymentController extends Controller
         try {
             $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
 
-            /** * IMMEDIATE CANCELLATION
-             * By calling cancel(), the subscription ends immediately.
-             * Stripe will not automatically refund the remaining days.
-             */
             $stripe->subscriptions->cancel($payment->stripe_subscription_id);
 
-            // Optional: Update your local database status immediately
             $payment->update(['status' => 'cancelled']); 
             $user->update(['plan_id' => null]); // Remove plan access
+
+            DB::table('external_apis')->where('user_id', $user->id)->update(['end_date' => now()]);
 
             return response()->json([
                 'success' => true,
@@ -328,7 +358,7 @@ class PlanPaymentController extends Controller
         $stripe = new StripeClient(config('services.stripe.secret'));
 
         $session = $stripe->billingPortal->sessions->create([
-            'customer' => $user->stripe_id, // User model-e stripe_id thakte hobe
+            'customer' => $user->stripe_id, 
             'return_url' => url('/user-dashboard'),
         ]);
 

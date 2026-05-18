@@ -223,4 +223,12 @@ class User extends Authenticatable
         return $this->hasMany(UserDevice::class, 'user_id', 'id');
     }
 
+    /**
+     * Get the external API configuration associated with the user.
+     */
+    public function externalApi()
+    {
+        return $this->hasOne(ExternalApi::class, 'user_id');
+    }
+
 }

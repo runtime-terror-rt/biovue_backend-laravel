@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('plans', function (Blueprint $table) {
             $table->id();
             $table->string('name'); 
-            $table->enum('plan_type', ['individual', 'professional'])->default('individual');
+            $table->enum('plan_type', ['individual', 'professional','api'])->default('individual');
             $table->foreignId('user_id')->constrained()->onDelete('cascade'); 
             $table->enum('billing_cycle', ['days', 'monthly', 'half_annual', 'annual', 'custom']);
             $table->decimal('price', 10, 2)->default(0.00);
