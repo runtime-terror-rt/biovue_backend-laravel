@@ -74,9 +74,9 @@ class PlanPaymentController extends Controller
     public function paymentProcess(Request $request)
     {
         $request->validate([
-            'plan_id' => 'required|exists:plans,id',
-            'billing' => 'required|in:monthly,half_annual,annual,custom',
-            'meter_id' => 'nullable|string',
+            'plan_id'          => 'required|exists:plans,id',
+            'billing'          => 'required|in:monthly,half_annual,annual,custom',
+            'meter_id'         => 'nullable|string',
             'meter_event_name' => 'nullable|string',
         ]);
 
@@ -84,11 +84,10 @@ class PlanPaymentController extends Controller
         $user = auth()->user();
 
         $finalPrice = $plan->price;
-        
-        $interval = $plan->billing_cycle === 'annual' ? 'year' : 'month';
+        $interval = 'month';
 
         if ($plan->plan_type === 'individual' || $plan->plan_type === 'api') {
-            if ($request->billing === 'annual' || $plan->billing_cycle === 'annual') {
+            if ($request->billing === 'annual') {
                 $finalPrice = $plan->price * 12 * 0.9; // 10% Discount
                 $interval = 'year';
             }
@@ -122,33 +121,9 @@ class PlanPaymentController extends Controller
                 $productName .= " (API Access Plan)";
             }
 
-            $sessionConfig = [
-                'mode' => 'subscription', 
-                'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url'  => url('/api/v1/payment/cancel'),
-                'subscription_data' => [
-                    'metadata' => [
-                        'payment_id'       => $payment->id,
-                        'user_id'          => $user->id,
-                        'plan_type'        => $plan->plan_type,
-                        'meter_id'         => $request->meter_id ?? '',
-                        'meter_event_name' => $request->meter_event_name ?? '',
-                    ]
-                ],
-                'metadata' => [
-                    'payment_id' => $payment->id,
-                    'user_id'    => $user->id,
-                    'plan_type'  => $plan->plan_type,
-                ],
-            ];
-
-            if (!empty($plan->stripe_price_id) && $request->billing !== 'annual') {
-                $sessionConfig['line_items'] = [[
-                    'price' => $plan->stripe_price_id,
-                    'quantity' => 1,
-                ]];
-            } else {
-                $sessionConfig['line_items'] = [[
+            $session = $stripe->checkout->sessions->create([
+                'mode' => 'subscription',
+                'line_items' => [[
                     'price_data' => [
                         'currency'     => 'usd',
                         'unit_amount'  => (int)($finalPrice * 100),
@@ -160,10 +135,17 @@ class PlanPaymentController extends Controller
                         ],
                     ],
                     'quantity' => 1,
-                ]];
-            }
-
-            $session = $stripe->checkout->sessions->create($sessionConfig);
+                ]],
+                'metadata' => [
+                    'payment_id'       => $payment->id,
+                    'user_id'          => $user->id,
+                    'plan_type'        => $plan->plan_type,
+                    'meter_id'         => $request->meter_id ?? null,
+                    'meter_event_name' => $request->meter_event_name ?? null,
+                ],
+                'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url'  => url('/api/v1/payment/cancel'),
+            ]);
 
             $payment->update(['transaction_id' => $session->id]);
 
@@ -176,28 +158,28 @@ class PlanPaymentController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Stripe Payment Error for Plan Type API: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => 'Stripe Error: ' . $e->getMessage()], 500);
+            Log::error('Stripe Payment Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * Helper to activate credits/plan & handle API configurations
+     * Helper to activate credits/plan
      */
     protected function activateSubscription($payment, $user, $plan, $subscriptionId = null)
     {
         $duration = 30;
-        if ($payment->billing === 'annual' || $plan->billing_cycle === 'annual') $duration = 365;
-        if ($payment->billing === 'half_annual' || $plan->billing_cycle === 'half_annual') $duration = 180;
+        if ($payment->billing === 'annual') $duration = 365;
+        if ($payment->billing === 'half_annual') $duration = 180;
 
         $startDate = now();
         $endDate = now()->addDays($duration);
 
         $payment->update([
-            'status' => 'paid',
+            'status'                 => 'paid',
             'stripe_subscription_id' => $subscriptionId,
-            'paid_at' => $startDate,
-            'end_date' => $endDate,
+            'paid_at'                => $startDate,
+            'end_date'               => $endDate,
         ]);
 
         $user->update(['plan_id' => $plan->id]);
@@ -205,6 +187,7 @@ class PlanPaymentController extends Controller
         if ($plan && $plan->plan_type === 'api') {
             $existingKey = DB::table('external_apis')->where('user_id', $user->id)->value('api_key');
             $apiKey = $existingKey ?? 'bv_' . Str::random(60);
+
             DB::table('external_apis')->updateOrCreate(
                 ['user_id' => $user->id],
                 [
@@ -260,7 +243,6 @@ class PlanPaymentController extends Controller
 
                 if ($payment && $payment->status !== 'paid') {
                     $subId = $session->subscription;
-
                     $stripeSub = $stripe->subscriptions->retrieve($subId);
 
                     $trialEnds = $stripeSub->trial_end ? \Carbon\Carbon::createFromTimestamp($stripeSub->trial_end) : null;
@@ -272,7 +254,7 @@ class PlanPaymentController extends Controller
                             'user_id'       => $payment->user_id,
                             'type'          => 'default',
                             'stripe_status' => 'active',
-                            'stripe_price'  => $payment->amount, 
+                            'stripe_price'  => $payment->amount,
                             'quantity'      => 1,
                             'trial_ends_at' => $trialEnds,
                             'ends_at'       => $endsAt,
@@ -292,7 +274,7 @@ class PlanPaymentController extends Controller
                     );
 
                     $this->activateSubscription($payment, $payment->user, $payment->plan, $subId);
-                    
+                   
                     try {
                         $admin = User::find(1);
                         if ($admin) $admin->notify(new AdminNotification('New Subscription', "{$payment->user->name} onboarded", 'subscription'));
@@ -321,7 +303,7 @@ class PlanPaymentController extends Controller
     {
         $user = auth()->user();
 
-        // Professional User Restriction
+        // Professional User Restriction (6-Month Lock)
         if ($user->user_type === 'professional') {
             $minDate = $user->created_at->addMonths(6);
             if (now()->lt($minDate)) {
@@ -340,7 +322,7 @@ class PlanPaymentController extends Controller
 
         if (!$payment) {
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'message' => 'No active subscription found.'
             ], 404);
         }
@@ -349,7 +331,7 @@ class PlanPaymentController extends Controller
             $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
             $stripe->subscriptions->cancel($payment->stripe_subscription_id);
 
-            $payment->update(['status' => 'cancelled']); 
+            $payment->update(['status' => 'cancelled']);
             $user->update(['plan_id' => null]); 
 
             DB::table('external_apis')->where('user_id', $user->id)->update(['end_date' => now()]);
@@ -361,7 +343,7 @@ class PlanPaymentController extends Controller
 
         } catch (\Exception $e) {
             return response()->json([
-                'success' => false, 
+                'success' => false,
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -376,7 +358,7 @@ class PlanPaymentController extends Controller
         $stripe = new StripeClient(config('services.stripe.secret'));
 
         $session = $stripe->billingPortal->sessions->create([
-            'customer' => $user->stripe_id, 
+            'customer'   => $user->stripe_id, 
             'return_url' => url('/user-dashboard'),
         ]);
 
