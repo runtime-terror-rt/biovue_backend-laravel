@@ -45,7 +45,7 @@ use App\Http\Controllers\AI\UserHabitUpdateController;
 use App\Http\Controllers\AI\UserNutritionCalculateController;
 use App\Http\Controllers\Notification\DeviceController;
 use App\Http\Controllers\Partner\PartnerController;
-use App\Http\Controllers\Payment\ExternalApiController;
+use App\Http\Controllers\ExternalApiController;
 use App\Http\Controllers\PrivacyPolicy\PrivacyPolicyController;
 
 Route::prefix('v1')->group(function () {
