@@ -45,6 +45,7 @@ use App\Http\Controllers\AI\UserHabitUpdateController;
 use App\Http\Controllers\AI\UserNutritionCalculateController;
 use App\Http\Controllers\Notification\DeviceController;
 use App\Http\Controllers\Partner\PartnerController;
+use App\Http\Controllers\Payment\ExternalApiController;
 use App\Http\Controllers\PrivacyPolicy\PrivacyPolicyController;
 
 Route::prefix('v1')->group(function () {
@@ -326,8 +327,12 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('partners', PartnerController::class)->except(['index']);
 
         Route::get('getAiInputData/{userId}', [UserHabitUpdateController::class, 'getAiInputData']);
+
+        Route::get('/admin/external-apis', [ExternalApiController::class, 'index']);
+        Route::get('/external-api', [ExternalApiController::class, 'show']);
     });
 
+    Route::post('/external-api/validate', [ExternalApiController::class, 'validateApiKey']);
     Route::get('/products/supplier/ai', [ProductController::class, 'supplierProductForAI']);
     Route::get('/supplier-profile/{id}', [ProductController::class, 'supplierProfileWithProducts']);
 

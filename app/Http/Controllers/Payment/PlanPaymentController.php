@@ -410,7 +410,7 @@ class PlanPaymentController extends Controller
             [
                 'api_key'          => $apiKey,
                 'projection_limit' => $plan->projection_limit ?? 0,
-                'insite_limit'     => $plan->insite_limit ?? 0,
+                'insite_limit'     => $plan->projection_limit ?? 0,
                 'start_date'       => now(),
                 'end_date'         => now()->addDays($duration),
             ]
