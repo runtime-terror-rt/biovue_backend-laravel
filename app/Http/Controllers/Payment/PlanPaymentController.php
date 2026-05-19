@@ -191,10 +191,12 @@ class PlanPaymentController extends Controller
         $user->update(['plan_id' => $plan->id]);
 
         if ($plan && $plan->plan_type === 'api') {
+            $existingKey = DB::table('external_apis')->where('user_id', $user->id)->value('api_key');
+            $apiKey = $existingKey ?? 'bv_' . Str::random(60);
             DB::table('external_apis')->updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                    'api_key'          => DB::table('external_apis')->where('user_id', $user->id)->value('api_key') ?? 'bv_' . Str::random(60),
+                    'api_key'          => $apiKey,
                     'projection_limit' => $plan->projection_limit ?? 0, 
                     'insite_limit'     => $plan->member_limit ?? 0,
                     'start_date'       => $startDate,
@@ -207,8 +209,8 @@ class PlanPaymentController extends Controller
         ProjectionCredit::updateOrCreate(
             ['user_id' => $user->id],
             [
-                'projection_limit' => $plan->projection_limit,
-                'member_limit'     => $plan->member_limit,
+                'projection_limit' => $plan->projection_limit ?? 0,
+                'member_limit'     => $plan->member_limit ?? 0,
                 'expiry_date'      => $endDate,
                 'updated_at'       => now(),
             ]
@@ -347,7 +349,8 @@ class PlanPaymentController extends Controller
         }
     }
 
-    public function getCustomerPortal(Request $request) {
+    public function getCustomerPortal(Request $request) 
+    {
         $user = auth()->user();
         $stripe = new StripeClient(config('services.stripe.secret'));
 
