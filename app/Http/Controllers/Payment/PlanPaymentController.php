@@ -84,10 +84,11 @@ class PlanPaymentController extends Controller
         $user = auth()->user();
 
         $finalPrice = $plan->price;
-        $interval = 'month';
+        
+        $interval = $plan->billing_cycle === 'annual' ? 'year' : 'month';
 
         if ($plan->plan_type === 'individual' || $plan->plan_type === 'api') {
-            if ($request->billing === 'annual') {
+            if ($request->billing === 'annual' || $plan->billing_cycle === 'annual') {
                 $finalPrice = $plan->price * 12 * 0.9; // 10% Discount
                 $interval = 'year';
             }
@@ -104,7 +105,6 @@ class PlanPaymentController extends Controller
                 'status'         => 'unpaid',
             ]);
 
-            // Handle Free Plan
             if ($finalPrice <= 0) {
                 $this->activateSubscription($payment, $user, $plan);
                 return response()->json([
@@ -122,21 +122,10 @@ class PlanPaymentController extends Controller
                 $productName .= " (API Access Plan)";
             }
 
-            $session = $stripe->checkout->sessions->create([
+            $sessionConfig = [
                 'mode' => 'subscription', 
-                'line_items' => [[
-                    'price_data' => [
-                        'currency'     => 'usd',
-                        'unit_amount'  => (int)($finalPrice * 100),
-                        'recurring'    => [
-                            'interval' => $interval,
-                        ],
-                        'product_data' => [
-                            'name' => $productName,
-                        ],
-                    ],
-                    'quantity' => 1,
-                ]],
+                'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
+                'cancel_url'  => url('/api/v1/payment/cancel'),
                 'subscription_data' => [
                     'metadata' => [
                         'payment_id'       => $payment->id,
@@ -151,9 +140,31 @@ class PlanPaymentController extends Controller
                     'user_id'    => $user->id,
                     'plan_type'  => $plan->plan_type,
                 ],
-                'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url'  => url('/api/v1/payment/cancel'),
-            ]);
+            ];
+
+            // ডাটাবেজে অলরেডি স্ট্রাইপ প্রাইস আইডি থাকলে সেটা ব্যবহার করবে, না থাকলে নতুন করে প্রাইস ডাটা পাঠাবে
+            if (!empty($plan->stripe_price_id)) {
+                $sessionConfig['line_items'] = [[
+                    'price' => $plan->stripe_price_id,
+                    'quantity' => 1,
+                ]];
+            } else {
+                $sessionConfig['line_items'] = [[
+                    'price_data' => [
+                        'currency'     => 'usd',
+                        'unit_amount'  => (int)($finalPrice * 100),
+                        'recurring'    => [
+                            'interval' => $interval,
+                        ],
+                        'product_data' => [
+                            'name' => $productName,
+                        ],
+                    ],
+                    'quantity' => 1,
+                ]];
+            }
+
+            $session = $stripe->checkout->sessions->create($sessionConfig);
 
             $payment->update(['transaction_id' => $session->id]);
 
@@ -177,8 +188,8 @@ class PlanPaymentController extends Controller
     protected function activateSubscription($payment, $user, $plan, $subscriptionId = null)
     {
         $duration = 30;
-        if ($payment->billing === 'annual') $duration = 365;
-        if ($payment->billing === 'half_annual') $duration = 180;
+        if ($payment->billing === 'annual' || $plan->billing_cycle === 'annual') $duration = 365;
+        if ($payment->billing === 'half_annual' || $plan->billing_cycle === 'half_annual') $duration = 180;
 
         $startDate = now();
         $endDate = now()->addDays($duration);
@@ -199,10 +210,11 @@ class PlanPaymentController extends Controller
                 ['user_id' => $user->id],
                 [
                     'api_key'          => $apiKey,
-                    'projection_limit' => $plan->projection_limit ?? 0, // Null safety নিশ্চিত করা হয়েছে 
-                    'insite_limit'     => $plan->member_limit ?? 0,     // Null safety নিশ্চিত করা হয়েছে
+                    'projection_limit' => !empty($plan->projection_limit) ? (int)$plan->projection_limit : 0,
+                    'insite_limit'     => !empty($plan->member_limit) ? (int)$plan->member_limit : 0, 
                     'start_date'       => $startDate,
                     'end_date'         => $endDate,
+                    'created_at'       => now(),
                     'updated_at'       => now(),
                 ]
             );
@@ -211,8 +223,8 @@ class PlanPaymentController extends Controller
         ProjectionCredit::updateOrCreate(
             ['user_id' => $user->id],
             [
-                'projection_limit' => $plan->projection_limit ?? 0,
-                'member_limit'     => $plan->member_limit ?? 0,
+                'projection_limit' => !empty($plan->projection_limit) ? (int)$plan->projection_limit : 0,
+                'member_limit'     => !empty($plan->member_limit) ? (int)$plan->member_limit : 0,
                 'expiry_date'      => $endDate,
                 'updated_at'       => now(),
             ]
@@ -243,7 +255,9 @@ class PlanPaymentController extends Controller
 
             DB::beginTransaction();
             try {
-                $payment = $paymentId ? PlanPayment::with(['user', 'plan'])->find($paymentId) : PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
+                $payment = $paymentId 
+                    ? PlanPayment::with(['user', 'plan'])->find($paymentId) 
+                    : PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
 
                 if ($payment && $payment->status !== 'paid') {
                     $subId = $session->subscription;
@@ -301,6 +315,9 @@ class PlanPaymentController extends Controller
         return response('Webhook Handled', 200);
     }
 
+    /**
+     * Cancel Subscription
+     */
     public function cancelSubscription(Request $request)
     {
         $user = auth()->user();
@@ -351,6 +368,9 @@ class PlanPaymentController extends Controller
         }
     }
 
+    /**
+     * Get Stripe Customer Billing Portal URL
+     */
     public function getCustomerPortal(Request $request) 
     {
         $user = auth()->user();
