@@ -148,6 +148,8 @@ class PlanPaymentController extends Controller
                 ],
                 'metadata' => [
                     'payment_id' => $payment->id,
+                    'user_id'    => $user->id,
+                    'plan_type'  => $plan->plan_type,
                 ],
                 'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
                 'cancel_url'  => url('/api/v1/payment/cancel'),
@@ -197,8 +199,8 @@ class PlanPaymentController extends Controller
                 ['user_id' => $user->id],
                 [
                     'api_key'          => $apiKey,
-                    'projection_limit' => $plan->projection_limit ?? 0, 
-                    'insite_limit'     => $plan->member_limit ?? 0,
+                    'projection_limit' => $plan->projection_limit ?? 0, // Null safety নিশ্চিত করা হয়েছে 
+                    'insite_limit'     => $plan->member_limit ?? 0,     // Null safety নিশ্চিত করা হয়েছে
                     'start_date'       => $startDate,
                     'end_date'         => $endDate,
                     'updated_at'       => now(),
@@ -271,8 +273,8 @@ class PlanPaymentController extends Controller
                             'stripe_product'   => $payment->plan->name ?? 'N/A',
                             'stripe_price'     => $payment->amount,
                             'quantity'         => 1,
-                            'meter_id'         => $stripeSub->metadata->meter_id ?? null,
-                            'meter_event_name' => $stripeSub->metadata->meter_event_name ?? null,
+                            'meter_id'         => $stripeSub->metadata->meter_id ?? $session->metadata->meter_id ?? null,
+                            'meter_event_name' => $stripeSub->metadata->meter_event_name ?? $session->metadata->meter_event_name ?? null,
                         ]
                     );
 
