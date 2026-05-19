@@ -142,8 +142,7 @@ class PlanPaymentController extends Controller
                 ],
             ];
 
-            // ডাটাবেজে অলরেডি স্ট্রাইপ প্রাইস আইডি থাকলে সেটা ব্যবহার করবে, না থাকলে নতুন করে প্রাইস ডাটা পাঠাবে
-            if (!empty($plan->stripe_price_id)) {
+            if (!empty($plan->stripe_price_id) && $request->billing !== 'annual') {
                 $sessionConfig['line_items'] = [[
                     'price' => $plan->stripe_price_id,
                     'quantity' => 1,
@@ -177,8 +176,8 @@ class PlanPaymentController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Stripe Payment Error: ' . $e->getMessage());
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+            Log::error('Stripe Payment Error for Plan Type API: ' . $e->getMessage());
+            return response()->json(['success' => false, 'message' => 'Stripe Error: ' . $e->getMessage()], 500);
         }
     }
 
@@ -211,7 +210,7 @@ class PlanPaymentController extends Controller
                 [
                     'api_key'          => $apiKey,
                     'projection_limit' => !empty($plan->projection_limit) ? (int)$plan->projection_limit : 0,
-                    'insite_limit'     => !empty($plan->member_limit) ? (int)$plan->member_limit : 0, 
+                    'insite_limit'     => !empty($plan->projection_limit) ? (int)$plan->projection_limit : 0, 
                     'start_date'       => $startDate,
                     'end_date'         => $endDate,
                     'created_at'       => now(),
@@ -322,7 +321,7 @@ class PlanPaymentController extends Controller
     {
         $user = auth()->user();
 
-        // Professional User Restriction (6-Month Lock)
+        // Professional User Restriction
         if ($user->user_type === 'professional') {
             $minDate = $user->created_at->addMonths(6);
             if (now()->lt($minDate)) {
