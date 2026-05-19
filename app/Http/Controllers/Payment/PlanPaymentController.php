@@ -194,7 +194,7 @@ class PlanPaymentController extends Controller
             DB::table('external_apis')->updateOrCreate(
                 ['user_id' => $user->id],
                 [
-                   'api_key'          => DB::table('external_apis')->where('user_id', $user->id)->value('api_key') ?? 'bv_' . Str::random(60),
+                    'api_key'          => DB::table('external_apis')->where('user_id', $user->id)->value('api_key') ?? 'bv_' . Str::random(60),
                     'projection_limit' => $plan->projection_limit ?? 0, 
                     'insite_limit'     => $plan->member_limit ?? 0,
                     'start_date'       => $startDate,
@@ -301,7 +301,7 @@ class PlanPaymentController extends Controller
     {
         $user = auth()->user();
 
-        // 1. Professional User Restriction (6-Month Lock)
+        // Professional User Restriction (6-Month Lock)
         if ($user->user_type === 'professional') {
             $minDate = $user->created_at->addMonths(6);
             if (now()->lt($minDate)) {
@@ -312,7 +312,6 @@ class PlanPaymentController extends Controller
             }
         }
 
-        // 2. Find the active payment record
         $payment = PlanPayment::where('user_id', $user->id)
             ->where('status', 'paid')
             ->whereNotNull('stripe_subscription_id')
@@ -328,11 +327,10 @@ class PlanPaymentController extends Controller
 
         try {
             $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-
             $stripe->subscriptions->cancel($payment->stripe_subscription_id);
 
             $payment->update(['status' => 'cancelled']); 
-            $user->update(['plan_id' => null]); // Remove plan access
+            $user->update(['plan_id' => null]); 
 
             DB::table('external_apis')->where('user_id', $user->id)->update(['end_date' => now()]);
 
