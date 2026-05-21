@@ -252,6 +252,7 @@ class UserProfileController extends Controller
             return response()->json([
                 'success' => true,
                 'projection_limit' => 0,
+                'member_limit' => 0,
                 'expired_at' => $projectionCredit ? $projectionCredit->expiry_date : null,
             ]);
         }
@@ -259,6 +260,7 @@ class UserProfileController extends Controller
         return response()->json([
             'success' => true,
             'projection_limit' => $projectionCredit->projection_limit,
+            'member_limit' => $projectionCredit->member_limit,
             'expired_at' => $projectionCredit ? $projectionCredit->expiry_date : null,
         ]);
     }
