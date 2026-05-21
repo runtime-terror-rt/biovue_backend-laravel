@@ -72,9 +72,10 @@ Route::prefix('v1')->group(function () {
     // Public - Everyone can view plans
     // List all plans
     Route::get('plans', [PlanController::class, 'index'])->name('plans.index');
-
+    Route::get('/plans/active', [PlanController::class, 'getActivePlans']);
     // Show single plan
     Route::get('plans/{id}', [PlanController::class, 'show'])->name('plans.show');
+    
 
 
     // Public Route: Get Terms & Conditions
@@ -168,6 +169,7 @@ Route::prefix('v1')->group(function () {
         Route::post('connect-profession', [UserController::class, 'connectToProfession']);
         Route::get('connected-professions', [UserController::class, 'getMyConnections']);
         Route::get('connected-user-lists', [UserController::class, 'getConnectedUsersList']);
+        Route::post('cancel-connected-user',[UserController::class, 'cancelConnectedUser']);
         Route::get('professionals-data/{id}', [TrainerController::class, 'indexProfessionals']);
         Route::get('professional-client-card', [TrainerController::class, 'professionalClientCard']);
        //AIObser

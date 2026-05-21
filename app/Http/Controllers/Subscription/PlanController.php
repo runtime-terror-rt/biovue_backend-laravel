@@ -11,6 +11,7 @@ use App\Mail\PlanUpdatedMail;
 use Illuminate\Support\Facades\Mail;
 use Exception;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
+use Illuminate\Support\Facades\Log;
 
 
 
@@ -267,5 +268,98 @@ class PlanController extends Controller
             'success' => true,
             'message' => 'Plan deleted successfully'
         ], 200);
+    }
+
+    /**
+    * Get active plans and include the authenticated user's own plan ONLY for them if deactivated.
+    */
+    public function getActivePlans(Request $request)
+    {
+        try {
+            $type = $request->query('type'); 
+            $billing = $request->query('billing'); 
+            
+            $authUser = null;
+
+            if ($request->user()) {
+                $authUser = $request->user();
+            } 
+            elseif ($request->bearerToken()) {
+                $token = \Laravel\Sanctum\PersonalAccessToken::findToken($request->bearerToken());
+                if ($token) {
+                    $authUser = $token->tokenable;
+                }
+            }
+
+            $query = Plan::query();
+
+            if ($type && in_array($type, ['individual', 'professional', 'api'])) {
+                $query->where('plan_type', $type);
+            }
+
+            if ($billing) {
+                $query->where('billing_cycle', strtolower($billing));
+            }
+
+            $allPlans = $query->latest()->get();
+
+        $filteredPlans = $allPlans->filter(function ($plan) use ($authUser) {
+                
+            if ((bool)$plan->status === true) {
+                    return true;
+                }
+
+            if ((bool)$plan->status === false) {
+                    if (!empty($authUser) && !is_null($authUser->plan_id)) {
+                        if ((int)$authUser->plan_id === (int)$plan->id) {
+                            return true; 
+                        }
+                    }
+                }
+
+                return false;
+            });
+
+            if ($filteredPlans->isEmpty()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No plans found for the given criteria.',
+                ], 404);
+            }
+
+            $data = $filteredPlans->map(function ($plan) use ($authUser) {
+                
+                $isMyCurrentPlan = !empty($authUser) && (int)$authUser->plan_id === (int)$plan->id;
+
+                return [
+                    'id'               => $plan->id,
+                    'name'             => $plan->name,
+                    'plan_type'        => $plan->plan_type,
+                    'billing_cycle'    => $plan->billing_cycle,
+                    'duration'         => $plan->duration,
+                    'member_limit'     => $plan->member_limit,
+                    'features'         => is_string($plan->features) ? json_decode($plan->features) : $plan->features, 
+                    'status'           => (bool)$plan->status,
+                    'is_current_plan'  => $isMyCurrentPlan,
+                    'price'            => $plan->price,
+                    'stripe_price_id'  => $plan->stripe_price_id,
+                    'projection_limit' => $plan->projection_limit,
+                    'status_label'     => $plan->status ? 'Active' : 'Deactivated (Your Plan)',
+                ];
+            })->values();
+
+            return response()->json([
+                'success' => true,
+                'count'   => $data->count(),
+                'data'    => $data
+            ], 200);
+
+        } catch (\Exception $e) {
+            \Log::error('Get Active Plans Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch active plans: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

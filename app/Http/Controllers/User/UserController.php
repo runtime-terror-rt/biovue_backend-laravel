@@ -9,6 +9,9 @@ use App\Models\Schedule;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Mail\ProfessionalConnectedMail;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 class UserController extends Controller
 {
@@ -1089,13 +1092,27 @@ class UserController extends Controller
                 return response()->json(['success' => false, 'message' => 'This professional has reached their maximum member limit.'], 400);
             }
 
+            $connectedUser = User::with('profile')->find($professionId);
+
+            if (!$connectedUser) {
+                return response()->json(['success' => false, 'message' => 'Professional not found.'], 404);
+            }
+
+            DB::beginTransaction();
+
             $user->myProfessionals()->syncWithoutDetaching([$professionId]);
 
             if ($user->is_invited != 0) {
-            $creditRecord->decrement('member_limit');
+                $creditRecord->decrement('member_limit');
             }
 
-            $connectedUser = User::with('profile')->find($professionId);
+            DB::commit();
+
+            try {
+                Mail::to($connectedUser->email)->send(new ProfessionalConnectedMail($user, $connectedUser));
+            } catch (\Exception $mailException) {
+                Log::error('Notification Email Failed: ' . $mailException->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -1103,15 +1120,76 @@ class UserController extends Controller
                 'data' => [
                     'connection_details' => ['connected_at' => now()->format('Y-m-d H:i:s'), 'status' => 'active'],
                     'professional_info' => [
-                        'id' => $connectedUser->id,
-                        'name' => $connectedUser->name,
+                        'id'        => $connectedUser->id,
+                        'name'      => $connectedUser->name,
                         'user_type' => $connectedUser->user_type,
                     ]
                 ]
             ], 200);
 
         } catch (\Exception $e) {
-            return response()->json(['success' => false, 'error' => $e->getMessage()], 500);
+            DB::rollBack();
+            
+            Log::error('Connect to Profession Error: ' . $e->getMessage());
+            return response()->json(['success' => false, 'error' => 'Something went wrong.'], 500);
+        }
+    }
+
+    public function cancelConnectedUser(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $professionId = auth()->user()->id;
+        $targetUserId = $request->input('user_id');
+
+        $connection = DB::table('connect_user_proffesions')
+            ->where('profession_id', $professionId)
+            ->where('user_id', $targetUserId)
+            ->first();
+
+        if (!$connection) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No active connection found with this user.',
+            ], 404);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            DB::table('connect_user_proffesions')
+                ->where('profession_id', $professionId)
+                ->where('user_id', $targetUserId)
+                ->delete();
+
+            $creditRecord = ProjectionCredit::where('user_id', $professionId)->first();
+
+            if ($creditRecord) {
+                $creditRecord->increment('member_limit');
+            } else {
+                ProjectionCredit::create([
+                    'user_id' => $professionId,
+                    'member_limit' => 1 
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'User connection has been successfully cancelled and credit refunded.',
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            Log::error('Cancel Connection Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Something went wrong while cancelling the connection.',
+            ], 500);
         }
     }
 
