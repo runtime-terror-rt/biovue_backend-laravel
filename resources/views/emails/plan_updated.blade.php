@@ -1,109 +1,20 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <style>
-        .email-container {
-            max-width: 600px;
-            margin: 0 auto;
-            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-            padding: 40px 20px;
-            background-color: #f4f7f9;
-        }
-        .email-card {
-            background: #ffffff;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-            text-align: left; 
-        }
-        .logo-container {
-            text-align: center; 
-            margin-bottom: 30px;
-        }
-        .logo {
-            width: 140px;
-        }
-        .greeting {
-            color: #333333;
-            font-size: 20px;
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
-        .content-text {
-            color: #555555;
-            font-size: 15px;
-            line-height: 1.6;
-            margin-bottom: 15px;
-        }
-        .button-wrapper {
-            text-align: center; 
-            margin: 30px 0;
-        }
-        .btn {
-            display: inline-block;
-            background-color: #000000;
-            color: #ffffff !important;
-            padding: 14px 30px;
-            text-decoration: none;
-            border-radius: 6px;
-            font-weight: bold;
-            font-size: 15px;
-        }
-        .footer-section {
-            margin-top: 35px;
-            padding-top: 20px;
-            border-top: 1px solid #eeeeee;
-        }
-        .signature {
-            color: #333333;
-            font-size: 15px;
-            line-height: 1.4;
-        }
-    </style>
-</head>
-<body>
-    <div class="email-container">
-        <div class="logo-container">
-            <img src="https://biovuedigitalwellness.com/images/logo.png" alt="BioVue Logo" class="logo">
-        </div>
+@extends('emails.layouts.master')
 
-        <div class="email-card">
-            <h3> <strong>Your Plan Options Have Been Updated</strong> </h3>
-            <div class="greeting">Hello, {{ $userName }}!</div>
+@section('title', 'Plan Updated')
 
-            <p class="content-text">
-                We’ve recently updated our plan options to bring you even more value and flexibility.
-            </p>
-            
-            <p class="content-text">
-                There’s nothing you need to do — your current plan pricing and auto-renewal will continue exactly as they are.
-            </p>
-            
-            <p class="content-text">
-                If you’re curious about the new options, you’re welcome to explore them anytime in your account.
-            </p>
+@section('content')
+    <h2 style="font-size: 20px; margin-bottom: 15px; color: #111;">Hello,</h2>
+    
+    <p>We wanted to inform you that your wellness plan has been updated.</p>
+    
+    <p>No immediate action is required on your part — your current plan pricing and auto-renewal will continue exactly as they are.</p>
+    
+    <p>If you’re curious about the new options, you’re welcome to explore them anytime in your account.</p>
 
-            <div class="button-row" style="text-align: center; margin: 30px 0;">
-                <a href="{{ $url }}" class="btn btn-primary" style="display: inline-block; background-color: #000000; color: #ffffff !important; padding: 12px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; margin: 5px;">
-                    Check My Plan
-                </a>
-
-                <a href="https://biovuedigitalwellness.com/pricing" class="btn btn-outline" style="display: inline-block; background-color: #ffffff; color: #000000 !important; border: 2px solid #000000; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; margin: 5px;">
-                    Check New Plan
-                </a>
-            </div>
-
-            <div class="footer-section">
-                <p class="signature">
-                    Regards,<br>
-                    <strong>The BioVue Team</strong>
-                </p>
-            </div>
-        </div>
-
-        <div style="text-align: center; font-size: 12px; color: #999; margin-top: 20px;">
-            &copy; {{ date('Y') }} BioVue Digital Wellness. All rights reserved.
-        </div>
+    <div class="btn-container" style="margin-top: 30px;">
+        <a href="{{ $url }}" class="btn-primary" style="margin-right: 10px;">Check My Plan</a>
+        <a href="https://biovuedigitalwellness.com/pricing" class="btn-primary" style="background-color: #ffffff; color: #1b1b18 !important; border: 2px solid #1b1b18; padding: 12px 28px;">Check New Plan</a>
     </div>
-</body>
-</html>
+
+    <p>Regards,<br><strong>The BioVue Team</strong></p>
+@endsection
