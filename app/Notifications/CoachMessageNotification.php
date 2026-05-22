@@ -16,12 +16,14 @@ class CoachMessageNotification extends Notification implements ShouldQueue, Shou
     public $title;
     public $message;
     public $type;
+    public $additionalData;
 
-    public function __construct($title, $message, $type)
+    public function __construct($title, $message, $type, $additionalData = [])
     {
         $this->title = $title;
         $this->message = $message;
         $this->type = $type;
+        $this->additionalData = $additionalData;
     }
 
     public function via(object $notifiable): array
@@ -38,6 +40,7 @@ class CoachMessageNotification extends Notification implements ShouldQueue, Shou
             'title'   => $this->title,
             'message' => $this->message,
             'type'    => $this->type,
+            'additional_data' => $this->additionalData,
         ];
     }
 
@@ -47,6 +50,7 @@ class CoachMessageNotification extends Notification implements ShouldQueue, Shou
             'title'   => $this->title,
             'message' => $this->message,
             'type'    => $this->type,
+            'additional_data' => $this->additionalData,
         ]);
     }
 

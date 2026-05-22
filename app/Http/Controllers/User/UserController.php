@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use App\Mail\ProfessionalConnectedMail;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Log;
+use App\Notifications\CoachMessageNotification;
 use Carbon\Carbon;
 class UserController extends Controller
 {
@@ -1106,6 +1107,16 @@ class UserController extends Controller
                 $creditRecord->decrement('member_limit');
             }
 
+            $title = 'New Connection Request';
+            $message = "{$user->name} has successfully connected with you.";
+            $type = 'new_connection'; 
+            $additionalData = [
+                'connected_user_id' => $user->id,
+                'connected_at'      => now()->format('Y-m-d H:i:s'),
+            ];
+
+            $connectedUser->notify(new CoachMessageNotification($title, $message, $type, $additionalData));
+
             DB::commit();
 
             try {
@@ -1141,45 +1152,70 @@ class UserController extends Controller
             'user_id' => 'required|integer|exists:users,id',
         ]);
 
-        $professionId = auth()->user()->id;
+        $authUser = auth()->user();
+        $authUserId = $authUser->id;
+        $authUserName = $authUser->name;
         $targetUserId = $request->input('user_id');
 
         $connection = DB::table('connect_user_proffesions')
-            ->where('profession_id', $professionId)
-            ->where('user_id', $targetUserId)
+            ->where(function ($query) use ($authUserId, $targetUserId) {
+                $query->where('profession_id', $authUserId)
+                    ->where('user_id', $targetUserId);
+            })
+            ->orWhere(function ($query) use ($authUserId, $targetUserId) {
+                $query->where('user_id', $authUserId)
+                    ->where('profession_id', $targetUserId);
+            })
             ->first();
 
         if (!$connection) {
             return response()->json([
                 'success' => false,
-                'message' => 'No active connection found with this user.',
+                'message' => 'No active connection found between you and this user.',
             ], 404);
         }
+
+        $notificationTargetId = ($authUserId == $connection->profession_id) 
+            ? $connection->user_id 
+            : $connection->profession_id;
 
         DB::beginTransaction();
 
         try {
             DB::table('connect_user_proffesions')
-                ->where('profession_id', $professionId)
-                ->where('user_id', $targetUserId)
+                ->where('id', $connection->id)
                 ->delete();
 
-            $creditRecord = ProjectionCredit::where('user_id', $professionId)->first();
+            $professionIdForCredit = $connection->profession_id;
+            $creditRecord = ProjectionCredit::where('user_id', $professionIdForCredit)->first();
 
             if ($creditRecord) {
                 $creditRecord->increment('member_limit');
             } else {
                 ProjectionCredit::create([
-                    'user_id' => $professionId,
+                    'user_id' => $professionIdForCredit,
                     'member_limit' => 1 
                 ]);
+            }
+
+            $targetUser = User::find($notificationTargetId);
+            if ($targetUser) {
+                $title = 'Connection Cancelled';
+                $message = "{$authUserName} has cancelled the connection with you.";
+                $type = 'connection_cancelled';
+                $additionalData = [
+                    'cancelled_by'  => $authUserId,
+                    'connection_id' => $connection->id
+                ];
+
+                $targetUser->notify(new CoachMessageNotification($title, $message, $type, $additionalData));
             }
 
             DB::commit();
 
             return response()->json([
                 'success' => true,
-                'message' => 'User connection has been successfully cancelled and credit refunded.',
+                'message' => 'User connection has been successfully cancelled, credit refunded, and user notified.',
             ]);
 
         } catch (\Exception $e) {

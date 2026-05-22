@@ -25,4 +25,4 @@ Route::get('/clear-cache', function () {
             'message' => 'Failed to clear cache: ' . $e->getMessage()
         ], 500);
     }
-});
+})->name('admin.clearCache');
