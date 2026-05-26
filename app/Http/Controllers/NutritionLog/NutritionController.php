@@ -12,14 +12,32 @@ use Illuminate\Support\Facades\DB;
 class NutritionController extends Controller
 {
     // List all logs for the authenticated user
-    public function index()
-    {
-        return response()->json(
-            Auth::user()
-            ->nutritionLogs()
+  public function index()
+{
+    try {
+
+        $today = now()->format('Y-m-d');
+
+        $logs = NutritionLog::where('user_id', auth()->id())
+            ->whereDate('log_date', $today)
             ->orderBy('id', 'desc')
-            ->get());
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => $logs
+        ]);
+
+    } catch (\Exception $e) {
+
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
+
+
 
     // Store or Update a log for a specific date
     public function store(Request $request)
