@@ -248,7 +248,7 @@ class UserProfileController extends Controller
                 'message' => 'Unauthorized'
             ], 401);
         }
-
+    
         $projectionCredit = ProjectionCredit::where('user_id', $user->id)->first();
         
         if (!$projectionCredit) {
@@ -256,10 +256,10 @@ class UserProfileController extends Controller
                 'success' => true,
                 'projection_limit' => 0,
                 'member_limit' => 0,
-                'expired_at' => null,
+                'expired_at' => null, 
             ]);
         }
-
+    
         return response()->json([
             'success' => true,
             'projection_limit' => $projectionCredit->projection_limit,
