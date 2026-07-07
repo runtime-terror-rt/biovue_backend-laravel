@@ -238,22 +238,25 @@ class UserProfileController extends Controller
         }
     }
 
-    public function getProjectionLimitAndExoiredAt()
+    public function getProjectionLimitAndExpiredAt()
     {
         $user = auth()->user();
         
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized'
+            ], 401);
+        }
+
         $projectionCredit = ProjectionCredit::where('user_id', $user->id)->first();
-        
-        // $latestPayment = PlanPayment::where('user_id', $user->id)
-        //                             ->latest() 
-        //                             ->first();
         
         if (!$projectionCredit) {
             return response()->json([
                 'success' => true,
                 'projection_limit' => 0,
                 'member_limit' => 0,
-                'expired_at' => $projectionCredit ? $projectionCredit->expiry_date : null,
+                'expired_at' => null,
             ]);
         }
 
@@ -261,7 +264,7 @@ class UserProfileController extends Controller
             'success' => true,
             'projection_limit' => $projectionCredit->projection_limit,
             'member_limit' => $projectionCredit->member_limit,
-            'expired_at' => $projectionCredit ? $projectionCredit->expiry_date : null,
+            'expired_at' => $projectionCredit->expiry_date,
         ]);
     }
 }
