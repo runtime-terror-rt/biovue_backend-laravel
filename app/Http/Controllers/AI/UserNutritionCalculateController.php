@@ -10,7 +10,9 @@ use App\Models\AI\UserNutritionCalculate;
 class UserNutritionCalculateController extends Controller
 {
     /**
-     * Store nutrition calculation for a user
+     * Store nutrition calculation for a user.
+     * Always inserts a new row, then returns the AGGREGATED total
+     * for that user + log_date (i.e. all rows of that day combined).
      */
     public function store(Request $request)
     {
@@ -20,10 +22,11 @@ class UserNutritionCalculateController extends Controller
         ]);
 
         try {
-            $userId = $request->user_id;
+            $userId   = $request->user_id;
             $newFoods = $request->foods;
-            $logDate = $request->log_date ?? now()->toDateString();
+            $logDate  = $request->log_date ?? now()->toDateString();
 
+            // Call AI Nutrition API (only for the newly submitted foods)
             $response = Http::withoutVerifying()
                 ->timeout(120)
                 ->post('https://ai.biovuedigitalwellness.com/api/v1/habits/nutritions/calculate', [
@@ -40,77 +43,40 @@ class UserNutritionCalculateController extends Controller
 
             $data = $response->json();
 
-            $caloriesValue = $data['nutrition']['calories']['value'] ?? 0;
+            $caloriesValue = (float) ($data['nutrition']['calories']['value'] ?? 0);
             $caloriesUnit  = $data['nutrition']['calories']['unit'] ?? 'kcal';
 
-            $proteinValue = $data['nutrition']['macros']['protein']['value'] ?? 0;
+            $proteinValue = (float) ($data['nutrition']['macros']['protein']['value'] ?? 0);
             $proteinUnit  = $data['nutrition']['macros']['protein']['unit'] ?? 'g';
 
-            $carbsValue = $data['nutrition']['macros']['carbs']['value'] ?? 0;
+            $carbsValue = (float) ($data['nutrition']['macros']['carbs']['value'] ?? 0);
             $carbsUnit  = $data['nutrition']['macros']['carbs']['unit'] ?? 'g';
 
-            $fatValue = $data['nutrition']['macros']['fat']['value'] ?? 0;
+            $fatValue = (float) ($data['nutrition']['macros']['fat']['value'] ?? 0);
             $fatUnit  = $data['nutrition']['macros']['fat']['unit'] ?? 'g';
 
-            $existing = UserNutritionCalculate::where('user_id', $userId)
-                ->whereDate('log_date', $logDate)
-                ->first();
+            $total = $caloriesValue + $proteinValue + $carbsValue + $fatValue;
 
-            if ($existing) {
-                $existingFoods = is_array($existing->foods) ? $existing->foods : json_decode($existing->foods, true);
-                $mergedFoods = array_merge($existingFoods, $newFoods);
+            // Always insert — this call's foods as its own row
+            UserNutritionCalculate::create([
+                'user_id'        => $userId,
+                'foods'          => $newFoods,
+                'calories_value' => $caloriesValue,
+                'calories_unit'  => $caloriesUnit,
+                'protein_value'  => $proteinValue,
+                'protein_unit'   => $proteinUnit,
+                'carbs_value'    => $carbsValue,
+                'carbs_unit'     => $carbsUnit,
+                'fat_value'      => $fatValue,
+                'fat_unit'       => $fatUnit,
+                'total'          => $total,
+                'log_date'       => $logDate,
+            ]);
 
-                $caloriesValue = $existing->calories_value + $caloriesValue;
-                $proteinValue  = $existing->protein_value + $proteinValue;
-                $carbsValue    = $existing->carbs_value + $carbsValue;
-                $fatValue      = $existing->fat_value + $fatValue;
-                $total         = $caloriesValue + $proteinValue + $carbsValue + $fatValue;
+            // Return the combined total of ALL rows for this user + date
+            $aggregated = $this->aggregateForDate($userId, $logDate);
 
-                $existing->update([
-                    'foods' => $mergedFoods,
-                    'calories_value' => $caloriesValue,
-                    'protein_value' => $proteinValue,
-                    'carbs_value' => $carbsValue,
-                    'fat_value' => $fatValue,
-                    'total' => $total,
-                ]);
-
-                $nutrition = $existing;
-                $foods = $mergedFoods;
-            } else {
-                $total = $caloriesValue + $proteinValue + $carbsValue + $fatValue;
-
-                $nutrition = UserNutritionCalculate::create([
-                    'user_id' => $userId,
-                    'foods' => $newFoods,
-                    'calories_value' => $caloriesValue,
-                    'calories_unit' => $caloriesUnit,
-                    'protein_value' => $proteinValue,
-                    'protein_unit' => $proteinUnit,
-                    'carbs_value' => $carbsValue,
-                    'carbs_unit' => $carbsUnit,
-                    'fat_value' => $fatValue,
-                    'fat_unit' => $fatUnit,
-                    'total' => $total,
-                    'log_date' => $logDate,
-                ]);
-
-                $foods = $newFoods;
-            }
-
-            return response()->json([
-                'log_date' => $logDate,
-                'nutrition' => [
-                    'calories' => ['value' => $caloriesValue, 'unit' => $caloriesUnit],
-                    'macros' => [
-                        'protein' => ['value' => $proteinValue, 'unit' => $proteinUnit],
-                        'carbs' => ['value' => $carbsValue, 'unit' => $carbsUnit],
-                        'fat' => ['value' => $fatValue, 'unit' => $fatUnit],
-                    ],
-                    'total' => $total,
-                    'foods' => $foods
-                ]
-            ], 200);
+            return response()->json($aggregated, 200);
 
         } catch (\Exception $e) {
             return response()->json([
@@ -119,7 +85,6 @@ class UserNutritionCalculateController extends Controller
             ], 500);
         }
     }
-
 
     /**
      * Show authenticated user's nutrition calculation for a given date (default: today)
@@ -130,14 +95,28 @@ class UserNutritionCalculateController extends Controller
 
         $logDate = $request->log_date ?? now()->toDateString();
 
-        $nutritions = UserNutritionCalculate::where('user_id', $user->id)
+        $aggregated = $this->aggregateForDate($user->id, $logDate);
+
+        if ($aggregated === null) {
+            return response()->json([
+                'message' => 'No nutrition data found for this user on ' . $logDate
+            ], 404);
+        }
+
+        return response()->json($aggregated, 200);
+    }
+
+    /**
+     * Combine (sum) all rows for a given user + log_date into one response.
+     */
+    private function aggregateForDate($userId, $logDate)
+    {
+        $nutritions = UserNutritionCalculate::where('user_id', $userId)
             ->whereDate('log_date', $logDate)
             ->get();
 
         if ($nutritions->isEmpty()) {
-            return response()->json([
-                'message' => 'No nutrition data found for this user on ' . $logDate
-            ], 404);
+            return null;
         }
 
         $caloriesValue = $nutritions->sum('calories_value');
@@ -147,10 +126,12 @@ class UserNutritionCalculateController extends Controller
         $total         = $nutritions->sum('total');
 
         $allFoods = $nutritions->flatMap(function ($item) {
-            return is_array($item->foods) ? $item->foods : json_decode($item->foods, true);
+            return is_array($item->foods)
+                ? $item->foods
+                : (json_decode($item->foods, true) ?? []);
         })->values();
 
-        return response()->json([
+        return [
             'log_date' => $logDate,
             'nutrition' => [
                 'calories' => [
@@ -174,6 +155,6 @@ class UserNutritionCalculateController extends Controller
                 'total' => $total,
                 'foods' => $allFoods
             ]
-        ], 200);
+        ];
     }
 }
