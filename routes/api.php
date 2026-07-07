@@ -289,7 +289,7 @@ Route::prefix('v1')->group(function () {
 
         // Projections
         Route::post('/generate/projections', [ProjectionController::class, 'generateProjection']);
-         Route::get('/projections/limit-expired', [UserProfileController::class, 'getProjectionLimitAndExoiredAt']);
+         Route::get('/projections/limit-expired', [UserProfileController::class, 'getProjectionLimitAndExpiredAt']);
         Route::get('/projections/{id}', [ProjectionController::class, 'show']);
         Route::get('/my-projections', [ProjectionController::class, 'index']);
         Route::get('/user/notification', [NotificationController::class, 'getSettings']);
