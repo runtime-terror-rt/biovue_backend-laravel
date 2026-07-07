@@ -30,6 +30,7 @@ class UserNutritionCalculate extends Model
         'foods' => 'array',
         'macros' => 'array', 
         'nutrition' => 'array',
+        'log_date' => 'date',
     ];
 
     public function user()
