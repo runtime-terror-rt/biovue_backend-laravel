@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\NutritionLog;
 
 use App\Http\Controllers\Controller;
+use App\Models\AI\UserNutritionCalculate;
 use App\Models\NutritionLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -116,32 +117,35 @@ class NutritionController extends Controller
         $endDate = Carbon::today();
         $startDate = $this->getStartDate($type);
 
-        $logs = NutritionLog::where('user_id', $userId)
+        $groupedLogs = UserNutritionCalculate::where('user_id', $userId)
             ->whereBetween('log_date', [$startDate, $endDate])
             ->get()
-            ->keyBy(fn($item) => Carbon::parse($item->log_date)->format('Y-m-d'));
+            ->groupBy(fn($item) => Carbon::parse($item->log_date)->format('Y-m-d'));
 
-        $chartData = $this->generateNutritionChart($type, $startDate, $endDate, $logs);
+        $chartData = $this->generateNutritionChart($type, $startDate, $endDate, $groupedLogs);
 
         $avgWater = $this->getAverageHydration($userId, $startDate, $endDate); 
-        $daysWithData = $logs->count();
+        
+        $daysWithData = $groupedLogs->count();
         $totalDays = $startDate->diffInDays($endDate) + 1;
+        
+        $bestStreak = $this->calculateBestStreak($groupedLogs, $startDate, $endDate);
 
         return response()->json([
             'status' => 'success',
             'data' => [
+                'filter_applied' => $type,
                 'chart_data' => $chartData,
                 'statistics' => [
                     'average' => $avgWater . " Glasses GLS",
                     'consistency' => round(($daysWithData / $totalDays) * 100) . "%",
-                    'best_streak' => "7 DAYS",
+                    'best_streak' => $bestStreak . " DAYS",
                     'current_trend' => "Improving",
                 ],
                 'bio_insight' => "Your nutrition quality is balanced. Maintaining high protein servings helps in physical recovery markers."
             ]
         ]);
     }
-
 
     private function getAverageHydration($userId, $startDate, $endDate) 
     {
@@ -156,53 +160,79 @@ class NutritionController extends Controller
     private function getStartDate($type) 
     {
         return match($type) {
-            'monthly' => Carbon::today()->subDays(29),
-            '3_months' => Carbon::today()->subMonths(3),
-            default => Carbon::today()->subDays(6),
+            'monthly'  => Carbon::today()->subDays(29),
+            '3_months' => Carbon::today()->subMonths(3)->addDay(),
+            default    => Carbon::today()->subDays(6),
         };
     }
 
-    private function generateNutritionChart($type, $startDate, $endDate, $logs) 
+    private function generateNutritionChart($type, $startDate, $endDate, $groupedLogs) 
     {
         $data = [];
+        
         for ($date = $startDate->copy(); $date <= $endDate; $date->addDay()) {
             $dateString = $date->format('Y-m-d');
-            $log = $logs->get($dateString);
+            
+            $label = match($type) {
+                'weekly'   => $date->format('D'),  
+                'monthly', '3_months' => $date->format('d M'),
+                default    => $date->format('D'),
+            };
 
-            if ($log) {
-                $pWeight = $log->protein_servings * 10; 
-                $cWeight = 0;
-                $fWeight = 0;
+            $dayNutritions = $groupedLogs->get($dateString);
 
-                switch ($log->meal_balance) {
-                    case 'balanced': $cWeight = 35; $fWeight = 35; break;
-                    case 'high_carb': $cWeight = 50; $fWeight = 20; break;
-                    case 'high_protein': $pWeight += 20; $cWeight = 25; $fWeight = 25; break;
-                    case 'keto': $cWeight = 10; $fWeight = 60; break;
-                    default: $cWeight = 30; $fWeight = 30;
+            if ($dayNutritions && $dayNutritions->isNotEmpty()) {
+                $proteinValue = $dayNutritions->sum('protein_value');
+                $carbsValue   = $dayNutritions->sum('carbs_value');
+                $fatValue     = $dayNutritions->sum('fat_value');
+                
+                $totalMacros = $proteinValue + $carbsValue + $fatValue;
+
+                if ($totalMacros > 0) {
+                    $proteinPct = round(($proteinValue / $totalMacros) * 100);
+                    $carbsPct   = round(($carbsValue / $totalMacros) * 100);
+                    $fatsPct    = 100 - ($proteinPct + $carbsPct); 
+                } else {
+                    $proteinPct = $carbsPct = $fatsPct = 0;
                 }
 
-                $total = $pWeight + $cWeight + $fWeight;
-                
-                $proteinPct = round(($pWeight / $total) * 100);
-                $carbsPct = round(($cWeight / $total) * 100);
-                $fatsPct = 100 - ($proteinPct + $carbsPct); 
-
                 $data[] = [
-                    'label' => $date->format('D'), 
+                    'label'   => $label, 
                     'protein' => $proteinPct, 
-                    'carbs' => $carbsPct,   
-                    'fats' => $fatsPct      
+                    'carbs'   => $carbsPct,   
+                    'fats'    => $fatsPct      
                 ];
             } else {
                 $data[] = [
-                    'label' => $date->format('D'), 
+                    'label'   => $label, 
                     'protein' => 0, 
-                    'carbs' => 0,   
-                    'fats' => 0      
+                    'carbs'   => 0,   
+                    'fats'    => 0      
                 ];
             }
         }
         return $data;
+    }
+
+
+    private function calculateBestStreak($groupedLogs, $startDate, $endDate)
+    {
+        $currentStreak = 0;
+        $bestStreak = 0;
+        
+        for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+            $dateString = $date->format('Y-m-d');
+            
+            if ($groupedLogs->has($dateString)) {
+                $currentStreak++;
+                if ($currentStreak > $bestStreak) {
+                    $bestStreak = $currentStreak;
+                }
+            } else {
+                $currentStreak = 0;
+            }
+        }
+        
+        return $bestStreak;
     }
 }
