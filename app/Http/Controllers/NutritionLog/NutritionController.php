@@ -112,11 +112,13 @@ class NutritionController extends Controller
     public function getNutritionReport(Request $request)
     {
         $userId = auth()->id();
-        $type = $request->query('type', 'weekly'); 
-        
-        $endDate = Carbon::today();
+        $type = $request->query('type', 'weekly');
+
+        $endDate   = Carbon::today();
         $startDate = $this->getStartDate($type);
 
+        // Same grouping idea as aggregateForDate() in store()/show() —
+        // but grouped per day across the whole range instead of a single date
         $groupedLogs = UserNutritionCalculate::where('user_id', $userId)
             ->whereBetween('log_date', [$startDate, $endDate])
             ->get()
@@ -124,12 +126,14 @@ class NutritionController extends Controller
 
         $chartData = $this->generateNutritionChart($type, $startDate, $endDate, $groupedLogs);
 
-        $avgWater = $this->getAverageHydration($userId, $startDate, $endDate); 
-        
         $daysWithData = $groupedLogs->count();
-        $totalDays = $startDate->diffInDays($endDate) + 1;
-        
+        $totalDays    = $startDate->diffInDays($endDate) + 1;
+
+        $avgCalories = $this->getAverageCalories($groupedLogs);
+
         $bestStreak = $this->calculateBestStreak($groupedLogs, $startDate, $endDate);
+
+        $currentTrend = $this->calculateTrend($groupedLogs, $startDate, $endDate);
 
         return response()->json([
             'status' => 'success',
@@ -137,27 +141,34 @@ class NutritionController extends Controller
                 'filter_applied' => $type,
                 'chart_data' => $chartData,
                 'statistics' => [
-                    'average' => $avgWater . " Glasses GLS",
-                    'consistency' => round(($daysWithData / $totalDays) * 100) . "%",
-                    'best_streak' => $bestStreak . " DAYS",
-                    'current_trend' => "Improving",
+                    'average'       => $avgCalories . " kcal",
+                    'consistency'   => round(($daysWithData / $totalDays) * 100) . "%",
+                    'best_streak'   => $bestStreak . " DAYS",
+                    'current_trend' => $currentTrend,
                 ],
                 'bio_insight' => "Your nutrition quality is balanced. Maintaining high protein servings helps in physical recovery markers."
             ]
         ]);
     }
 
-    private function getAverageHydration($userId, $startDate, $endDate) 
+    /**
+     * Average daily calories — sum each day's calories (like aggregateForDate does
+     * for a single date), then average across the days that actually have logs.
+     */
+    private function getAverageCalories($groupedLogs)
     {
-        $avg = DB::table('sleep_logs')
-            ->where('user_id', $userId)
-            ->whereBetween('log_date', [$startDate, $endDate])
-            ->avg('water_glasses');
+        if ($groupedLogs->isEmpty()) {
+            return 0;
+        }
 
-        return round($avg ?? 0);
+        $totalCalories = $groupedLogs->sum(function ($dayLogs) {
+            return $dayLogs->sum('calories_value');
+        });
+
+        return round($totalCalories / $groupedLogs->count());
     }
 
-    private function getStartDate($type) 
+    private function getStartDate($type)
     {
         return match($type) {
             'monthly'  => Carbon::today()->subDays(29),
@@ -166,17 +177,17 @@ class NutritionController extends Controller
         };
     }
 
-    private function generateNutritionChart($type, $startDate, $endDate, $groupedLogs) 
+    private function generateNutritionChart($type, $startDate, $endDate, $groupedLogs)
     {
         $data = [];
-        
+
         for ($date = $startDate->copy(); $date <= $endDate; $date->addDay()) {
             $dateString = $date->format('Y-m-d');
-            
+
             $label = match($type) {
-                'weekly'   => $date->format('D'),  
-                'monthly', '3_months' => $date->format('d M'),
-                default    => $date->format('D'),
+                'weekly'               => $date->format('D'),
+                'monthly', '3_months'  => $date->format('d M'),
+                default                => $date->format('D'),
             };
 
             $dayNutritions = $groupedLogs->get($dateString);
@@ -185,44 +196,43 @@ class NutritionController extends Controller
                 $proteinValue = $dayNutritions->sum('protein_value');
                 $carbsValue   = $dayNutritions->sum('carbs_value');
                 $fatValue     = $dayNutritions->sum('fat_value');
-                
+
                 $totalMacros = $proteinValue + $carbsValue + $fatValue;
 
                 if ($totalMacros > 0) {
                     $proteinPct = round(($proteinValue / $totalMacros) * 100);
                     $carbsPct   = round(($carbsValue / $totalMacros) * 100);
-                    $fatsPct    = 100 - ($proteinPct + $carbsPct); 
+                    $fatsPct    = 100 - ($proteinPct + $carbsPct);
                 } else {
                     $proteinPct = $carbsPct = $fatsPct = 0;
                 }
 
                 $data[] = [
-                    'label'   => $label, 
-                    'protein' => $proteinPct, 
-                    'carbs'   => $carbsPct,   
-                    'fats'    => $fatsPct      
+                    'label'   => $label,
+                    'protein' => $proteinPct,
+                    'carbs'   => $carbsPct,
+                    'fats'    => $fatsPct
                 ];
             } else {
                 $data[] = [
-                    'label'   => $label, 
-                    'protein' => 0, 
-                    'carbs'   => 0,   
-                    'fats'    => 0      
+                    'label'   => $label,
+                    'protein' => 0,
+                    'carbs'   => 0,
+                    'fats'    => 0
                 ];
             }
         }
         return $data;
     }
 
-
     private function calculateBestStreak($groupedLogs, $startDate, $endDate)
     {
         $currentStreak = 0;
-        $bestStreak = 0;
-        
+        $bestStreak    = 0;
+
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             $dateString = $date->format('Y-m-d');
-            
+
             if ($groupedLogs->has($dateString)) {
                 $currentStreak++;
                 if ($currentStreak > $bestStreak) {
@@ -232,7 +242,63 @@ class NutritionController extends Controller
                 $currentStreak = 0;
             }
         }
-        
+
         return $bestStreak;
     }
+
+    /**
+     * Compare average daily calories in the first half of the range vs the
+     * second half, to decide if the trend is Improving / Declining / Stable.
+     */
+    private function calculateTrend($groupedLogs, $startDate, $endDate)
+    {
+        $totalDays = $startDate->diffInDays($endDate) + 1;
+        $midPoint  = $startDate->copy()->addDays(intdiv($totalDays, 2));
+
+        $firstHalfTotal = 0; $firstHalfDays = 0;
+        $secondHalfTotal = 0; $secondHalfDays = 0;
+
+        for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+            $dateString = $date->format('Y-m-d');
+            $dayLogs = $groupedLogs->get($dateString);
+
+            if ($dayLogs && $dayLogs->isNotEmpty()) {
+                $dayCalories = $dayLogs->sum('calories_value');
+
+                if ($date->lt($midPoint)) {
+                    $firstHalfTotal += $dayCalories;
+                    $firstHalfDays++;
+                } else {
+                    $secondHalfTotal += $dayCalories;
+                    $secondHalfDays++;
+                }
+            }
+        }
+
+        if ($firstHalfDays === 0 && $secondHalfDays === 0) {
+            return "No Data";
+        }
+
+        $firstHalfAvg  = $firstHalfDays > 0 ? $firstHalfTotal / $firstHalfDays : 0;
+        $secondHalfAvg = $secondHalfDays > 0 ? $secondHalfTotal / $secondHalfDays : 0;
+
+        if ($secondHalfAvg > $firstHalfAvg) {
+            return "Improving";
+        } elseif ($secondHalfAvg < $firstHalfAvg) {
+            return "Declining";
+        }
+
+        return "Stable";
+    }
+
+    private function getAverageHydration($userId, $startDate, $endDate) 
+    {
+        $avg = DB::table('hydration_logs')
+            ->where('user_id', $userId)
+            ->whereBetween('log_date', [$startDate, $endDate])
+            ->avg('water_glasses');
+
+        return round($avg ?? 0);
+    }
+
 }
