@@ -54,6 +54,16 @@ Route::prefix('v1')->group(function () {
         $user = \App\Models\User::find(1);
         return $user->createToken('MasterKey')->plainTextToken;
     });
+
+    Route::get('/clear-cache', function () {
+        Artisan::call('optimize:clear');
+        
+        return response()->json([
+            'success' => true,
+            'message' => 'All caches cleared successfully (Route, Config, Cache, View)!',
+            'output'  => Artisan::output()
+        ]);
+    });
     // ----------------------------
     // Public Routes
     // ----------------------------
