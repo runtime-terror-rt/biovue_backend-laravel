@@ -27,7 +27,7 @@ class SignUpController extends Controller
             'password' => ['required', 'confirmed', Password::min(8)->letters()->mixedCase()->numbers()->symbols()],
             'role' => 'required|string',
             'terms_accepted' => 'required|accepted',
-            'user_type' => 'required|string|in:individual,professional',
+            'user_type' => 'required|string|in:individual,professional,api',
             'g-recaptcha-response' => 'required',
         ];
 
