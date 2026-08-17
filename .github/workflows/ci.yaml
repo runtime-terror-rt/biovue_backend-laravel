@@ -1,8 +1,7 @@
 name: CD Pipeline
 
 on:
-  push:
-    branches: [main] # Trigger the workflow on push to the main branch
+  workflow_dispatch:   # Only manual trigger
 
 jobs:
   build-and-push:
