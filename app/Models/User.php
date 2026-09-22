@@ -120,7 +120,9 @@ class User extends Authenticatable
 
     public function getImageUrlAttribute()
     {
-        return $this->image ? asset('storage/' . $this->image) : null;
+        $img = $this->image ?? $this->profile?->image;
+        if (!$img) return null;
+        return str_starts_with($img, 'http') ? $img : asset('storage/' . $img);
     }
 
 

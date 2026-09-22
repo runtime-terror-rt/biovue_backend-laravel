@@ -107,6 +107,77 @@ class UserNutritionCalculateController extends Controller
     }
 
     /**
+     * Delete a single food item from the day's nutrition log
+     */
+    public function deleteFoodItem(Request $request)
+    {
+        $request->validate([
+            'food' => 'required|string',
+            'log_date' => 'nullable|date',
+            'user_id' => 'nullable|exists:users,id',
+        ]);
+
+        $userId = $request->user_id ?? auth()->id();
+        $logDate = $request->log_date ?? now()->toDateString();
+        $foodToRemove = trim($request->food);
+
+        $records = UserNutritionCalculate::where('user_id', $userId)
+            ->whereDate('log_date', $logDate)
+            ->get();
+
+        if ($records->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No nutrition records found for this date.'
+            ], 404);
+        }
+
+        $removed = false;
+        foreach ($records as $record) {
+            $foods = is_array($record->foods) ? $record->foods : (json_decode($record->foods, true) ?? []);
+            
+            $newFoods = [];
+            $foundInRecord = false;
+            foreach ($foods as $f) {
+                if (!$foundInRecord && strcasecmp(trim($f), $foodToRemove) === 0) {
+                    $foundInRecord = true;
+                    $removed = true;
+                    continue; // Skip this one instance
+                }
+                $newFoods[] = $f;
+            }
+
+            if ($foundInRecord) {
+                if (empty($newFoods)) {
+                    $record->delete();
+                } else {
+                    $oldCount = max(1, count($foods));
+                    $newCount = count($newFoods);
+                    $ratio = $newCount / $oldCount;
+
+                    $record->update([
+                        'foods'          => array_values($newFoods),
+                        'calories_value' => round($record->calories_value * $ratio, 2),
+                        'protein_value'  => round($record->protein_value * $ratio, 2),
+                        'carbs_value'    => round($record->carbs_value * $ratio, 2),
+                        'fat_value'      => round($record->fat_value * $ratio, 2),
+                        'total'          => round($record->total * $ratio, 2),
+                    ]);
+                }
+                break;
+            }
+        }
+
+        $aggregated = $this->aggregateForDate($userId, $logDate);
+
+        return response()->json([
+            'success' => true,
+            'message' => $removed ? "Removed '{$foodToRemove}' successfully." : "Food item '{$foodToRemove}' not found.",
+            'data'    => $aggregated
+        ], 200);
+    }
+
+    /**
      * Combine (sum) all rows for a given user + log_date into one response.
      */
     private function aggregateForDate($userId, $logDate)

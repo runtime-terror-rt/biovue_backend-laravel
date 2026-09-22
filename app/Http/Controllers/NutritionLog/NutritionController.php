@@ -124,10 +124,14 @@ class NutritionController extends Controller
             ->get()
             ->groupBy(fn($item) => Carbon::parse($item->log_date)->format('Y-m-d'));
 
-        $chartData = $this->generateNutritionChart($type, $startDate, $endDate, $groupedLogs);
+        $targetGoal = \App\Models\TargetGoal::where('user_id', $userId)->where('is_active', true)->first();
+        $targetCalories = (float)($targetGoal->target_calories ?? 2000);
+
+        $chartData = $this->generateNutritionChart($type, $startDate, $endDate, $groupedLogs, $targetCalories);
 
         $daysWithData = $groupedLogs->count();
         $totalDays    = $startDate->diffInDays($endDate) + 1;
+        $totalEntries = UserNutritionCalculate::where('user_id', $userId)->count();
 
         $avgCalories = $this->getAverageCalories($groupedLogs);
 
@@ -141,10 +145,12 @@ class NutritionController extends Controller
                 'filter_applied' => $type,
                 'chart_data' => $chartData,
                 'statistics' => [
-                    'average'       => $avgCalories . " kcal",
-                    'consistency'   => round(($daysWithData / $totalDays) * 100) . "%",
-                    'best_streak'   => $bestStreak . " DAYS",
-                    'current_trend' => $currentTrend,
+                    'average'           => $avgCalories . " kcal",
+                    'target_calories'   => $targetCalories . " kcal",
+                    'consistency'       => round(($daysWithData / $totalDays) * 100) . "%",
+                    'best_streak'       => $bestStreak . " DAYS",
+                    'current_trend'     => $currentTrend,
+                    'total_entries'     => $totalEntries,
                 ],
                 'bio_insight' => "Your nutrition quality is balanced. Maintaining high protein servings helps in physical recovery markers."
             ]
@@ -177,7 +183,7 @@ class NutritionController extends Controller
         };
     }
 
-    private function generateNutritionChart($type, $startDate, $endDate, $groupedLogs)
+    private function generateNutritionChart($type, $startDate, $endDate, $groupedLogs, $targetCalories = 2000)
     {
         $data = [];
 
@@ -193,9 +199,10 @@ class NutritionController extends Controller
             $dayNutritions = $groupedLogs->get($dateString);
 
             if ($dayNutritions && $dayNutritions->isNotEmpty()) {
-                $proteinValue = $dayNutritions->sum('protein_value');
-                $carbsValue   = $dayNutritions->sum('carbs_value');
-                $fatValue     = $dayNutritions->sum('fat_value');
+                $dayCalories  = (float)$dayNutritions->sum('calories_value');
+                $proteinValue = (float)$dayNutritions->sum('protein_value');
+                $carbsValue   = (float)$dayNutritions->sum('carbs_value');
+                $fatValue     = (float)$dayNutritions->sum('fat_value');
 
                 $totalMacros = $proteinValue + $carbsValue + $fatValue;
 
@@ -207,18 +214,28 @@ class NutritionController extends Controller
                     $proteinPct = $carbsPct = $fatsPct = 0;
                 }
 
+                $adherencePct = $targetCalories > 0 ? round(($dayCalories / $targetCalories) * 100) : 0;
+
                 $data[] = [
-                    'label'   => $label,
-                    'protein' => $proteinPct,
-                    'carbs'   => $carbsPct,
-                    'fats'    => $fatsPct
+                    'label'              => $label,
+                    'date'               => $dateString,
+                    'calories'           => round($dayCalories),
+                    'calorie_percentage' => $adherencePct,
+                    'adherence_pct'      => $adherencePct,
+                    'protein'            => $proteinPct,
+                    'carbs'              => $carbsPct,
+                    'fats'               => $fatsPct,
                 ];
             } else {
                 $data[] = [
-                    'label'   => $label,
-                    'protein' => 0,
-                    'carbs'   => 0,
-                    'fats'    => 0
+                    'label'              => $label,
+                    'date'               => $dateString,
+                    'calories'           => 0,
+                    'calorie_percentage' => 0,
+                    'adherence_pct'      => 0,
+                    'protein'            => 0,
+                    'carbs'              => 0,
+                    'fats'               => 0,
                 ];
             }
         }

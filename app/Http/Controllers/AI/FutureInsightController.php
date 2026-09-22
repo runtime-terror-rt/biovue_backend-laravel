@@ -24,6 +24,18 @@ class FutureInsightController extends Controller
         $userId = $request->user_id;
         $timeframe = $request->timeframe;
 
+        $user = \App\Models\User::find($userId);
+        $userPlan = $user?->plan;
+        $planName = strtolower($userPlan?->name ?? 'free');
+        $isPremium = str_contains($planName, 'premium');
+
+        if (in_array(strtolower(trim($timeframe)), ['5_year', '5year', '5 year', '5']) && !$isPremium) {
+            return response()->json([
+                'success' => false,
+                'message' => '5-Year Health Insights and downloadable reports are exclusively available on the Premium plan. Please upgrade to Premium.'
+            ], 403);
+        }
+
         try {
             // Check last insight
             $lastInsight = FutureInsight::where('user_id', $userId)->latest()->first();

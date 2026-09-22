@@ -137,19 +137,26 @@ class UserHabitUpdateController extends Controller
 
     public function getAiInputData($userId)
     {
-        return User::with(['profile', 'activityLogs', 'nutritionLogs', 'stressLogs', 'sleepLogs'])
+        return User::with(['profile', 'activityLogs', 'nutritionLogs', 'stressLogs', 'sleepLogs', 'hydrationLogs'])
             ->where('id', $userId)
             ->get()
             ->map(function($user) {
+            $unit = $user->profile->unit ?? 'imperial';
+            $avgGlasses = $user->hydrationLogs()->avg('water_glasses') ?? 0;
+            $avgOz = $user->hydrationLogs()->avg('water_oz') ?? ($avgGlasses * 8);
+
             return [
                 'demographics' => [
                     'age' => $user->profile->age,
                     'gender' => $user->profile->sex,
-                    'bmi' => $this->calculateBMI($user->profile->weight, $user->profile->height),
+                    'unit' => $unit,
+                    'bmi' => $this->calculateBMI($user->profile->weight, $user->profile->height, $unit),
                 ],
                 'habits' => [
                     'avg_sleep' => $user->sleepLogs()->avg('sleep_hours'),
                     'avg_steps' => $user->activityLogs()->avg('daily_steps'),
+                    'avg_hydration_oz' => round($avgOz, 1),
+                    'avg_hydration_glasses' => round($avgGlasses, 1),
                     'diet_quality' => $user->profile->overall_diet_quality,
                 ],
                 'risk_factors' => [
@@ -161,12 +168,23 @@ class UserHabitUpdateController extends Controller
         });
     }
 
-    public function calculateBMI($weight, $height)
+    public function calculateBMI($weight, $height, $unit = 'imperial')
     {
-        if ($height > 0) {
-            return round($weight / (($height / 100) ** 2), 2);
+        $weight = (float)$weight;
+        $height = (float)$height;
+
+        if ($weight <= 0 || $height <= 0) {
+            return null;
         }
-        return null;
+
+        if ($unit === 'imperial') {
+            // Weight in lbs, height in inches
+            return round(($weight / ($height * $height)) * 703, 1);
+        } else {
+            // Weight in kg, height in cm
+            $heightMeters = $height > 3 ? $height / 100 : $height;
+            return round($weight / ($heightMeters * $heightMeters), 1);
+        }
     }
 
     

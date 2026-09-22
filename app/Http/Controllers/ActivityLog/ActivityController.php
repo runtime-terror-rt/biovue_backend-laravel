@@ -21,6 +21,10 @@ class ActivityController extends Controller
 
     public function store(Request $request)
     {
+        if ($request->has('weight') && ($request->weight === '' || $request->weight === null)) {
+            $request->merge(['weight' => null]);
+        }
+
         $validated = $request->validate([
             'id'            => 'nullable|exists:activity_logs,id',
             'log_date'      => 'required|date',

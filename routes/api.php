@@ -47,6 +47,7 @@ use App\Http\Controllers\Notification\DeviceController;
 use App\Http\Controllers\Partner\PartnerController;
 use App\Http\Controllers\ExternalApiController;
 use App\Http\Controllers\PrivacyPolicy\PrivacyPolicyController;
+use Illuminate\Support\Facades\Artisan;
 
 Route::prefix('v1')->group(function () {
 
@@ -116,6 +117,9 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/update-fcm-token', [DeviceController::class, 'updateToken']);
         Route::post('save-terms', [PrivacyPolicyController::class, 'save']);
+        Route::post('privacy-policy', [PrivacyPolicyController::class, 'save']);
+        Route::post('/admin/privacy-policy', [PrivacyPolicyController::class, 'save']);
+        Route::get('/admin/privacy-policy', [PrivacyPolicyController::class, 'show']);
         Route::post('/payment/cancel', [PlanPaymentController::class, 'cancelSubscription']);
         //AI INsight part
         Route::post('/change-password', [ForgotPasswordController::class, 'changePassword']);
@@ -123,6 +127,7 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/nutrition/calculate', [UserNutritionCalculateController::class, 'store']);
         Route::get('/nutrition/show', [UserNutritionCalculateController::class, 'show']);
+        Route::post('/nutrition/delete-food', [UserNutritionCalculateController::class, 'deleteFoodItem']);
 
         Route::post('/habits/update', [UserHabitUpdateController::class, 'update']);
         Route::get('/habits/{user_id}', [UserHabitUpdateController::class, 'show']);
@@ -335,6 +340,9 @@ Route::prefix('v1')->group(function () {
 
         Route::get('supplyer-dashboard',[SupplyerController::class,'index']);
         Route::get('all-users-for-supplyer', [SupplyerController::class, 'userIndex']);
+        Route::post('supplier/find-match', [SupplyerController::class, 'findMatchSupplements']);
+        Route::post('supplier/walk-in-client', [SupplyerController::class, 'createWalkInClient']);
+        Route::post('supplier/notify-client', [SupplyerController::class, 'notifyClient']);
     
         Route::apiResource('partners', PartnerController::class)->except(['index']);
 

@@ -52,6 +52,21 @@ class PlanPaymentController extends Controller
             ->latest()
             ->get();
 
+        $latestPayment = $payments->first();
+        $userPlan = $user->plan;
+
+        $currentPlanName = $userPlan ? $userPlan->name : 'Free Trial';
+        $planNameLower = strtolower($currentPlanName);
+        $isPremium = str_contains($planNameLower, 'premium');
+        $isPlus = str_contains($planNameLower, 'plus');
+        $isFree = !$userPlan || str_contains($planNameLower, 'free');
+
+        $joinedAt = $user->created_at ?? now();
+        $trialExpiresAt = $joinedAt->copy()->addDays(7);
+        $trialDaysLeft = max(0, (int)ceil(now()->diffInSeconds($trialExpiresAt, false) / 86400));
+
+        $cancelRequested = $latestPayment && in_array($latestPayment->status, ['pending_cancellation', 'cancelled']);
+
         return response()->json([
             'success'         => true,
             'user'            => [
@@ -59,7 +74,20 @@ class PlanPaymentController extends Controller
                 'name'  => $user->name,
                 'email' => $user->email,
             ],
-            'latest_payment'  => $payments->first(),
+            'subscription_details' => [
+                'current_plan'        => $currentPlanName,
+                'is_premium'          => $isPremium,
+                'is_plus'             => $isPlus,
+                'is_free_trial'       => $isFree,
+                'can_upgrade'         => !$isPremium,
+                'show_upgrade_btn'    => !$isPremium,
+                'cancel_requested'    => $cancelRequested,
+                'show_expire_button'  => $cancelRequested,
+                'trial_days_left'     => $isFree ? $trialDaysLeft : 0,
+                'trial_ends_at'       => $isFree ? $trialExpiresAt->format('Y-m-d H:i:s') : null,
+                'access_until'        => $latestPayment?->end_date ? \Carbon\Carbon::parse($latestPayment->end_date)->format('d M, Y') : ($isFree ? $trialExpiresAt->format('d M, Y') : null),
+            ],
+            'latest_payment'  => $latestPayment,
             'payment_history' => $payments,
         ]);
     }
@@ -291,19 +319,34 @@ class PlanPaymentController extends Controller
 
         try {
             $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
-            $stripe->subscriptions->cancel($payment->stripe_subscription_id);
+            
+            // Cancel at period end in Stripe so the customer retains access through the billing period
+            $stripeSub = $stripe->subscriptions->update(
+                $payment->stripe_subscription_id,
+                ['cancel_at_period_end' => true]
+            );
 
-            $payment->update(['status' => 'cancelled']);
-            $user->update(['plan_id' => null]);
+            $periodEndTimestamp = $stripeSub->current_period_end ?? null;
+            $endDate = $periodEndTimestamp 
+                ? \Carbon\Carbon::createFromTimestamp($periodEndTimestamp) 
+                : ($payment->end_date ?? now()->addDays(30));
 
-            if ($payment->plan && $payment->plan->plan_type === 'api') {
-                ExternalApi::where('user_id', $user->id)
-                    ->update(['end_date' => now()]);
-            }
+            $payment->update([
+                'status'   => 'pending_cancellation',
+                'end_date' => $endDate,
+            ]);
+
+            // Customer retains access through the remainder of their monthly or annual period
+            $billingPeriod = ($payment->billing === 'annual' || $payment->billing === 'yearly') ? 'annual' : 'monthly';
+            $accessDate = $endDate->format('d M, Y');
 
             return response()->json([
-                'success' => true,
-                'message' => 'Your subscription has been cancelled immediately. No refunds will be issued for the remaining period.',
+                'success'           => true,
+                'status'            => 'pending_cancellation',
+                'can_cancel'        => false,
+                'cancel_requested'  => true,
+                'access_until'      => $accessDate,
+                'message'           => "Cancellation requested. You will retain full access through the remainder of your {$billingPeriod} billing period until {$accessDate}.",
             ]);
 
         } catch (\Exception $e) {

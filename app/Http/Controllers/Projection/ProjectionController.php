@@ -104,6 +104,48 @@ class ProjectionController extends Controller
 
         $user = auth()->user();
 
+        // Plan and feature permission check:
+        $userPlan = $user->plan;
+        $planName = strtolower($userPlan?->name ?? 'free');
+        $isPremium = str_contains($planName, 'premium');
+        $isPlus    = str_contains($planName, 'plus');
+        $isFree    = !$isPremium && !$isPlus;
+
+        $timeframe  = strtolower(trim($request->timeframe));
+        $resolution = strtolower(trim($request->resolution));
+
+        // 4k resolution is hidden for future use
+        if ($resolution === '4k') {
+            return response()->json([
+                'success' => false,
+                'message' => '4K resolution is currently not supported. Please choose 1K or 2K resolution.'
+            ], 422);
+        }
+
+        // Resolution limits: Free and Plus only get 1k; Premium gets 1k and 2k
+        if (($isFree || $isPlus) && $resolution !== '1k') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Your subscription plan only supports 1K resolution. Upgrade to Premium for 2K resolution.'
+            ], 403);
+        }
+
+        // Timeframe limits: Free trial only gets 1_year
+        if ($isFree && in_array($timeframe, ['6_month', '6month', '6 month', '5_year', '5year', '5 year', '5'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The Free Trial is only available for 1-Year projections. 6-Month and 5-Year options require a Plus or Premium subscription.'
+            ], 403);
+        }
+
+        // Plus users cannot access 5_year projections
+        if ($isPlus && in_array($timeframe, ['5_year', '5year', '5 year', '5'])) {
+            return response()->json([
+                'success' => false,
+                'message' => '5-Year projections and health insights are exclusively available on the Premium plan. Please upgrade to Premium.'
+            ], 403);
+        }
+
         // 2. Credit limit check
         $credits = ProjectionCredit::where('user_id', $user->id)->first();
         if (!$credits || $credits->projection_limit <= 0) {

@@ -27,12 +27,32 @@ class HydrationController extends Controller
     {
         $validated = $request->validate([
             'log_date'      => 'required|date',
-            'weight'        => 'nullable|numeric|min:0',
+            'water_oz'      => 'nullable|numeric|min:0',
+            'water_glasses' => 'nullable|numeric|min:0',
             'unit'          => 'nullable|string',
+            'weight'        => 'nullable|numeric|min:0',
             'daily_steps'   => 'nullable|integer|min:0',
             'sleep_hours'   => 'nullable|numeric|min:0|max:24',
-            'water_glasses' => 'nullable|integer|min:0',
         ]);
+
+        $waterOz = isset($validated['water_oz']) ? (float)$validated['water_oz'] : null;
+        $waterGlasses = isset($validated['water_glasses']) ? (float)$validated['water_glasses'] : null;
+
+        if ($waterOz !== null && $waterGlasses === null) {
+            $waterGlasses = round($waterOz / 8, 1);
+        } elseif ($waterGlasses !== null && $waterOz === null) {
+            if ($waterGlasses > 30) {
+                // If a user entered 64 or 100 ounces into glasses input, treat as ounces
+                $waterOz = $waterGlasses;
+                $waterGlasses = round($waterOz / 8, 1);
+            } else {
+                $waterOz = round($waterGlasses * 8, 1);
+            }
+        }
+
+        $validated['water_oz'] = $waterOz;
+        $validated['water_glasses'] = $waterGlasses !== null ? (int)round($waterGlasses) : 0;
+        $validated['unit'] = $validated['unit'] ?? 'oz';
 
         $activity = HydrationLog::updateOrCreate(
             [
@@ -42,14 +62,8 @@ class HydrationController extends Controller
             $validated
         );
 
-        $user = Auth::user();
-
         $status = $activity->wasRecentlyCreated ? 201 : 200;
         $message = $activity->wasRecentlyCreated ? 'Hydration log created' : 'Hydration log updated';
-
-        // $user->notify(new ReminderNotification('New Hydration Logs', 'Hydration Logs Added on '.$request->log_date .' ','reminder_message'));
-
-
 
         return response()->json([
             'success' => true,

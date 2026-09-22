@@ -81,24 +81,33 @@ class UserController extends Controller
                 return response()->json(['success' => false, 'message' => 'Profile not found'], 404);
             }
 
-            $unit = $profile->unit ?? 'imperial'; 
-            $weight = $profile->weight ?? 0;
-            $height = $profile->height ?? 0; 
+            $rawUnit = strtolower($profile->unit ?? 'imperial'); 
+            $isImperial = in_array($rawUnit, ['imperial', 'lbs', 'lb', 'pound', 'pounds']);
+            $unit = $isImperial ? 'imperial' : 'metric';
+            $weight = (float)($profile->weight ?? 0);
+            $height = (float)($profile->height ?? 0); 
 
-            $weightInKg = ($unit === 'imperial') ? $weight * 0.453592 : $weight;
-            $heightInMeters = $height / 100;
-            $bmi = $heightInMeters > 0 ? round($weightInKg / ($heightInMeters * $heightInMeters), 1) : 0;
+            if ($height > 0 && $weight > 0) {
+                $heightInches = $height > 100 ? ($height / 2.54) : $height;
+                $heightMeters = $height > 100 ? ($height / 100) : (($height * 2.54) / 100);
+                if ($isImperial) {
+                    $bmi = round(($weight / ($heightInches * $heightInches)) * 703, 1);
+                } else {
+                    $bmi = round($weight / ($heightMeters * $heightMeters), 1);
+                }
+            } else {
+                $bmi = 0;
+            }
 
-            if ($unit === 'imperial') {
+            if ($isImperial) {
                 $displayWeight = round($weight, 1) . ' lbs';
-                
-                $totalInches = $height / 2.54;
-                $feet = floor($totalInches / 12);
-                $inches = round($totalInches % 12);
+                $heightInches = $height > 100 ? ($height / 2.54) : $height;
+                $feet = floor($heightInches / 12);
+                $inches = round(fmod($heightInches, 12));
                 $displayHeight = "{$feet}'{$inches}\"";
             } else {
                 $displayWeight = round($weight, 1) . ' kg';
-                $displayHeight = $height . ' cm';
+                $displayHeight = ($height > 100 ? round($height, 1) : round($height * 2.54, 1)) . ' cm';
             }
 
             return response()->json([
@@ -177,16 +186,13 @@ class UserController extends Controller
 
             $bmi = 0;
             if ($storedHeight > 0 && $rawWeight > 0) {
+                $heightInches = $storedHeight > 100 ? ($storedHeight / 2.54) : $storedHeight;
+                $heightMeters = $storedHeight > 100 ? ($storedHeight / 100) : (($storedHeight * 2.54) / 100);
+
                 if ($activityUnit === 'imperial') {
-                    $heightInches = ($profileUnit === 'imperial')
-                                        ? $storedHeight  
-                                        : $storedHeight / 2.54; 
-                    $bmi = ($rawWeight / ($heightInches * $heightInches)) * 703;
+                    $bmi = ($heightInches > 0) ? round(($rawWeight / ($heightInches * $heightInches)) * 703, 1) : 0;
                 } else {
-                    $heightMeters = ($profileUnit === 'metric')
-                                        ? $storedHeight / 100        
-                                        : $storedHeight * 2.54 / 100;   
-                    $bmi = $rawWeight / ($heightMeters * $heightMeters);
+                    $bmi = ($heightMeters > 0) ? round($rawWeight / ($heightMeters * $heightMeters), 1) : 0;
                 }
             }
 
@@ -234,23 +240,47 @@ class UserController extends Controller
                             ? (float)$matchedSleepLogs->avg('sleep_hours')
                             : (float)($activityLogs->avg('sleep_hours') ?? 0);
 
-            $matchedHydrationLogs = $hydrationLogs->filter(
-                fn($log) => empty($log->unit) || $log->unit === $activityUnit
-            );
-            $avgHydration = $matchedHydrationLogs->count() > 0
-                                ? (float)$matchedHydrationLogs->avg('water_glasses')
-                                : (float)($activityLogs->avg('water_glasses') ?? 0);
+            // Calculate daily average hydration
+            $daysCount = max(1, \Carbon\Carbon::parse($startOfWeek)->diffInDays(\Carbon\Carbon::parse($endOfWeek)) + 1);
+            
+            $totalWaterGlasses = $hydrationLogs->sum('water_glasses');
+            $totalWaterOz = $hydrationLogs->sum(function($log) {
+                return isset($log->water_oz) && (float)$log->water_oz > 0 
+                    ? (float)$log->water_oz 
+                    : ((float)($log->water_glasses ?? 0) * 8);
+            });
+
+            // Daily averages
+            $avgDailyGlasses = round($totalWaterGlasses / $daysCount, 1);
+            $avgDailyOz = round($totalWaterOz / $daysCount, 1);
+
+            // Recommended daily water intake based on profile
+            $profileWeight = (float)($user->profile->weight ?? 0);
+            if ($profileWeight > 0) {
+                if ($activityUnit === 'imperial') {
+                    $recommendedWaterOz = round($profileWeight * 0.5, 0);
+                } else {
+                    $recommendedWaterOz = round(($profileWeight * 35) / 29.5735, 0);
+                }
+            } else {
+                $recommendedWaterOz = 64; // Default 64 oz (8 glasses)
+            }
+
+            $recommendedGlasses = round($recommendedWaterOz / 8, 0);
+            $waterTarget = (float)($user->targetGoals->water_target ?? 0);
+            if ($waterTarget <= 0) {
+                $waterTarget = $recommendedGlasses;
+            }
 
             $stepGoal    = (int)($user->targetGoals->daily_step_goal   ?? 10000);
             $sleepTarget = (float)($user->targetGoals->sleep_target    ?? 8);
-            $waterTarget = (float)($user->targetGoals->water_target    ?? 8);
 
             // Wellness Score (max 100)
             $wellnessScore  = 0;
             $wellnessScore += min(40, ($daysActive   / 7)                    * 40);
             $wellnessScore += min(25, ($avgSteps     / max($stepGoal,    1)) * 25);
             $wellnessScore += min(20, ($avgSleep     / max($sleepTarget, 1)) * 20);
-            $wellnessScore += min(15, ($avgHydration / max($waterTarget, 1)) * 15);
+            $wellnessScore += min(15, ($avgDailyGlasses / max($waterTarget, 1)) * 15);
             $wellnessScore  = min(100, (int)round($wellnessScore));
 
             return response()->json([
@@ -294,8 +324,13 @@ class UserController extends Controller
                             'coach_plan' => $sleepTarget . ' Hrs',
                         ],
                         'hydration' => [
-                            'current' => round($avgHydration, 1),
-                            'target'  => $waterTarget . ' glasses',
+                            'current'         => $avgDailyGlasses,
+                            'current_glasses' => $avgDailyGlasses . ' glasses',
+                            'current_oz'      => $avgDailyOz . ' oz',
+                            'target'          => $waterTarget . ' glasses',
+                            'target_glasses'  => $waterTarget . ' glasses',
+                            'target_oz'       => ($waterTarget * 8) . ' oz',
+                            'recommended_oz'  => $recommendedWaterOz . ' oz',
                         ],
                         'stress_and_mood' => [
                             'latest_mood'      => ucfirst($stressLogs->last()->mood ?? 'stable'),
@@ -943,8 +978,17 @@ class UserController extends Controller
                 ];
             }
 
+            $hydration = DB::table('hydration_logs')
+                ->where('user_id', $targetId)
+                ->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->get();
+
             $latestWeight = $activity->last()->weight ?? ($userData->profile->weight ?? 0);
-            $targetGoal = $userData->targetGoals?->first();
+            $targetGoal = $userData->targetGoals;
+
+            $avgDailyGlasses = round($hydration->avg('water_glasses') ?? 0, 1);
+            $avgDailyOz = round($hydration->avg('water_oz') ?? ($avgDailyGlasses * 8), 1);
+            $projectionsCount = DB::table('projection_data')->where('user_id', $targetId)->count();
 
             return response()->json([
                 'success' => true,
@@ -953,11 +997,28 @@ class UserController extends Controller
                 'health_overview' => [
                     'weight' => [
                         'current' => $latestWeight,
-                        'target' => $targetGoal->target_weight ?? 0
+                        'target'  => $targetGoal->target_weight ?? 0,
+                        'unit'    => $userData->profile->unit ?? 'imperial'
                     ],
                     'steps' => [
-                        'avg' => (int)$activity->avg('daily_steps'),
+                        'avg'    => (int)$activity->avg('daily_steps'),
                         'target' => $targetGoal->daily_step_goal ?? 6500
+                    ],
+                    'sleep' => [
+                        'avg'    => round($sleep->avg('sleep_hours') ?? 0, 1),
+                        'target' => $targetGoal->sleep_target ?? 8
+                    ],
+                    'hydration' => [
+                        'avg_daily_glasses' => $avgDailyGlasses,
+                        'avg_daily_oz'      => $avgDailyOz,
+                        'target_glasses'    => $targetGoal->water_target ?? 8
+                    ],
+                    'nutrition' => [
+                        'avg_calories' => round($nutrition->avg('calories_value') ?? 0),
+                        'total_logs'   => $nutrition->count()
+                    ],
+                    'projections_used' => [
+                        'count' => $projectionsCount
                     ]
                 ]
             ]);
@@ -1168,25 +1229,48 @@ class UserController extends Controller
             })
             ->first();
 
-        if (!$connection) {
+        $programConnection = DB::table('connect_to_professions')
+            ->where(function ($query) use ($authUserId, $targetUserId) {
+                $query->where('profession_id', $authUserId)
+                    ->where('user_id', $targetUserId);
+            })
+            ->orWhere(function ($query) use ($authUserId, $targetUserId) {
+                $query->where('user_id', $authUserId)
+                    ->where('profession_id', $targetUserId);
+            })
+            ->first();
+
+        if (!$connection && !$programConnection) {
             return response()->json([
                 'success' => false,
                 'message' => 'No active connection found between you and this user.',
             ], 404);
         }
 
-        $notificationTargetId = ($authUserId == $connection->profession_id) 
-            ? $connection->user_id 
-            : $connection->profession_id;
+        $notificationTargetId = $targetUserId;
+        $connectionId = $connection ? $connection->id : ($programConnection ? $programConnection->id : null);
 
         DB::beginTransaction();
 
         try {
-            DB::table('connect_user_proffesions')
-                ->where('id', $connection->id)
+            if ($connection) {
+                DB::table('connect_user_proffesions')
+                    ->where('id', $connection->id)
+                    ->delete();
+            }
+
+            DB::table('connect_to_professions')
+                ->where(function ($query) use ($authUserId, $targetUserId) {
+                    $query->where('profession_id', $authUserId)
+                        ->where('user_id', $targetUserId);
+                })
+                ->orWhere(function ($query) use ($authUserId, $targetUserId) {
+                    $query->where('user_id', $authUserId)
+                        ->where('profession_id', $targetUserId);
+                })
                 ->delete();
 
-            $professionIdForCredit = $connection->profession_id;
+            $professionIdForCredit = $connection ? $connection->profession_id : $authUserId;
             $creditRecord = ProjectionCredit::where('user_id', $professionIdForCredit)->first();
 
             if ($creditRecord) {
@@ -1200,15 +1284,19 @@ class UserController extends Controller
 
             $targetUser = User::find($notificationTargetId);
             if ($targetUser) {
-                $title = 'Connection Cancelled';
-                $message = "{$authUserName} has cancelled the connection with you.";
-                $type = 'connection_cancelled';
-                $additionalData = [
-                    'cancelled_by'  => $authUserId,
-                    'connection_id' => $connection->id
-                ];
+                try {
+                    $title = 'Connection Cancelled';
+                    $message = "{$authUserName} has cancelled the connection with you.";
+                    $type = 'connection_cancelled';
+                    $additionalData = [
+                        'cancelled_by'  => $authUserId,
+                        'connection_id' => $connectionId
+                    ];
 
-                $targetUser->notify(new CoachMessageNotification($title, $message, $type, $additionalData));
+                    $targetUser->notify(new CoachMessageNotification($title, $message, $type, $additionalData));
+                } catch (\Exception $notifyEx) {
+                    Log::warning('Cancel connection notify error: ' . $notifyEx->getMessage());
+                }
             }
 
             DB::commit();
@@ -1224,7 +1312,7 @@ class UserController extends Controller
             Log::error('Cancel Connection Error: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Something went wrong while cancelling the connection.',
+                'message' => 'Something went wrong while cancelling the connection: ' . $e->getMessage(),
             ], 500);
         }
     }

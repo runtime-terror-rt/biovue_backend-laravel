@@ -28,20 +28,20 @@ class PrivacyPolicyController extends Controller
     public function save(Request $request)
     {
         $request->validate([
-            'title'     => 'required|string|max:255',
-            'is_active' => 'required|boolean',
-            'items'     => 'required|array|min:1', 
-            'items.*.id'      => 'required|integer',
-            'items.*.heading' => 'required|string',
-            'items.*.content' => 'required|string',
+            'title'     => 'nullable|string|max:255',
+            'is_active' => 'nullable|boolean',
+            'content'   => 'nullable',
+            'items'     => 'nullable|array',
         ]);
+
+        $content = $request->items ?? $request->content ?? [];
 
         $policy = PrivacyPolicy::updateOrCreate(
             ['id' => 1], 
             [
-                'title'     => $request->title,
-                'content'   => $request->items, 
-                'is_active' => $request->is_active,
+                'title'     => $request->title ?? 'Privacy Policy',
+                'content'   => $content, 
+                'is_active' => $request->has('is_active') ? (bool)$request->is_active : true,
             ]
         );
 

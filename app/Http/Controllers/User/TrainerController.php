@@ -42,7 +42,7 @@ class TrainerController extends Controller
                     'experience'       => ($profile?->experience_years ?? 0) . " years",
                     'specialties'      => $profile?->specialties ?? [], 
                     'services'         => $profile?->services ?? [],
-                    'profile_image'    => $profile?->image ? asset('storage/' . $profile->image) : null,
+                    'profile_image'    => $profile?->image ? (str_starts_with($profile->image, 'http') ? $profile->image : asset('storage/' . $profile->image)) : null,
                     'created_at'       => $trainer->created_at->format('Y-m-d')
                 ]
             ], 200);
