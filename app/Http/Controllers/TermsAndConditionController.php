@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\TermsAndCondition;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class TermsAndConditionController extends Controller
 {
@@ -14,8 +15,9 @@ class TermsAndConditionController extends Controller
     public function get()
     {
         try {
-
-            $terms = TermsAndCondition::first();
+            $terms = Cache::remember('terms_conditions_public', 86400, function () {
+                return TermsAndCondition::first();
+            });
 
             if (!$terms) {
                 return response()->json([
@@ -66,6 +68,8 @@ class TermsAndConditionController extends Controller
                     'is_active' => $request->is_active,
                 ]
             );
+
+            Cache::forget('terms_conditions_public');
 
             return response()->json([
                 'success' => true,

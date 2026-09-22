@@ -5,12 +5,15 @@ namespace App\Http\Controllers\PrivacyPolicy;
 use App\Http\Controllers\Controller;
 use App\Models\PrivacyPolicy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class PrivacyPolicyController extends Controller
 {
     public function show()
     {
-        $policy = PrivacyPolicy::find(1);
+        $policy = Cache::remember('privacy_policy_public', 86400, function () {
+            return PrivacyPolicy::find(1);
+        });
 
         if (!$policy) {
             return response()->json([
@@ -44,6 +47,8 @@ class PrivacyPolicyController extends Controller
                 'is_active' => $request->has('is_active') ? (bool)$request->is_active : true,
             ]
         );
+
+        Cache::forget('privacy_policy_public');
 
         return response()->json([
             'success' => true,

@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Storage;
 use App\Imports\ProductsImport;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\ProductsExport;
+use Illuminate\Support\Facades\Cache;
 
 class ProductController extends Controller
 {
@@ -57,6 +58,8 @@ class ProductController extends Controller
             'supplier_id' => $user->id, 
         ]));
 
+        Cache::forget('products_published_list');
+
         return response()->json([
             'success' => true,
             'message' => 'Product created successfully',
@@ -70,18 +73,27 @@ class ProductController extends Controller
 
         if ($user && $user->user_type === 'professional' && $user->profession_type === 'supplement_supplier') {
             $products = Product::where('supplier_id', $user->id)->get();
+            $products->map(function ($product) {
+                if ($product->image) {
+                    $product->image = str_starts_with($product->image, 'http') 
+                        ? $product->image 
+                        : asset('storage/' . $product->image);
+                }
+                return $product;
+            });
         } else {
-            $products = Product::where('status', 'published')->get();
+            $products = Cache::remember('products_published_list', 1800, function () {
+                $items = Product::where('status', 'published')->get();
+                return $items->map(function ($product) {
+                    if ($product->image) {
+                        $product->image = str_starts_with($product->image, 'http') 
+                            ? $product->image 
+                            : asset('storage/' . $product->image);
+                    }
+                    return $product;
+                });
+            });
         }
-
-        $products->map(function ($product) {
-            if ($product->image) {
-                $product->image = str_starts_with($product->image, 'http') 
-                    ? $product->image 
-                    : asset('storage/' . $product->image);
-            }
-            return $product;
-        });
 
         return response()->json([
             'success' => true,
@@ -225,6 +237,8 @@ class ProductController extends Controller
                 'status' => $newStatus
             ]);
 
+            Cache::forget('products_published_list');
+
             return response()->json([
                 'success' => true,
                 'message' => "Product status successfully updated to " . ucfirst($newStatus),
@@ -272,6 +286,7 @@ class ProductController extends Controller
             }
 
             $product->update($validated);
+            Cache::forget('products_published_list');
 
             return response()->json([
                 'success' => true,
@@ -303,6 +318,7 @@ class ProductController extends Controller
             }
 
             $product->delete();
+            Cache::forget('products_published_list');
 
             return response()->json([
                 'success' => true,

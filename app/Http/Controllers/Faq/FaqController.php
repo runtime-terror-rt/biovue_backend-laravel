@@ -4,13 +4,15 @@ namespace App\Http\Controllers\Faq;
 use App\Http\Controllers\Controller;
 use App\Models\Faq;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class FaqController extends Controller
 {
     public function index()
     {
-        $faqs = Faq::where('is_active', true)
-                    ->get();
+        $faqs = Cache::remember('faqs_public_active', 86400, function () {
+            return Faq::where('is_active', true)->get();
+        });
                     
         return response()->json([
             'success' => true,
@@ -53,6 +55,8 @@ class FaqController extends Controller
             ]
         );
 
+        Cache::forget('faqs_public_active');
+
         return response()->json([
             'success' => true,
             'message' => $request->id ? 'FAQ updated successfully' : 'FAQ created successfully',
@@ -80,6 +84,7 @@ class FaqController extends Controller
         $faq = Faq::find($id);
         if ($faq) {
             $faq->delete();
+            Cache::forget('faqs_public_active');
             return response()->json(['message' => 'FAQ deleted successfully']);
         }
         return response()->json(['message' => 'FAQ not found'], 404);
@@ -97,6 +102,7 @@ class FaqController extends Controller
         if ($faq) {
             $faq->is_active = !$faq->is_active;
             $faq->save();
+            Cache::forget('faqs_public_active');
             return response()->json(['message' => 'FAQ status toggled successfully', 'data' => $faq]);
         }
         return response()->json(['message' => 'FAQ not found'], 404);

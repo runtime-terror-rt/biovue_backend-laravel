@@ -15,8 +15,19 @@ use Illuminate\Support\Facades\Log;
 
 
 
+use Illuminate\Support\Facades\Cache;
+
 class PlanController extends Controller
 {
+    public static function clearPlanCache()
+    {
+        foreach (['all', 'individual', 'professional', null] as $type) {
+            foreach (['monthly', 'annual'] as $billing) {
+                Cache::forget("plans_list_{$type}_{$billing}");
+            }
+        }
+    }
+
     /**
      * List plans (with optional type & billing filter)
      */
@@ -25,34 +36,37 @@ class PlanController extends Controller
         try {
             $type = $request->query('type'); 
             $billing = strtolower($request->query('billing', 'monthly'));
+            $cacheKey = "plans_list_{$type}_{$billing}";
 
-            $query = Plan::query(); 
+            $data = Cache::remember($cacheKey, 3600, function () use ($type, $billing) {
+                $query = Plan::query(); 
 
-            if ($type && in_array($type, ['individual', 'professional'])) {
-                $query->where('plan_type', $type);
-            }
+                if ($type && in_array($type, ['individual', 'professional'])) {
+                    $query->where('plan_type', $type);
+                }
 
-            $plans = $query->latest()->get();
+                $plans = $query->latest()->get();
 
-            $data = $plans->map(function ($plan) use ($billing) {
-                return [
-                    'id'             => $plan->id,
-                    'name'           => $plan->name,
-                    'plan_type'      => $plan->plan_type,
-                    'billing_cycle'  => $plan->billing_cycle,
-                    'duration'       => $plan->duration,
-                    'member_limit'   => $plan->member_limit,
-                    'features'       => $plan->features,
-                    'status'         => $plan->status,
-                    'price'          => $billing === 'annual' ? $plan->annual_price : $plan->price,
-                    'projection_limit' => $plan->projection_limit,
-                    'status_label'     => $plan->status ? 'Active' : 'Inactive',
-                ];
+                return $plans->map(function ($plan) use ($billing) {
+                    return [
+                        'id'             => $plan->id,
+                        'name'           => $plan->name,
+                        'plan_type'      => $plan->plan_type,
+                        'billing_cycle'  => $plan->billing_cycle,
+                        'duration'       => $plan->duration,
+                        'member_limit'   => $plan->member_limit,
+                        'features'       => $plan->features,
+                        'status'         => $plan->status,
+                        'price'          => $billing === 'annual' ? $plan->annual_price : $plan->price,
+                        'projection_limit' => $plan->projection_limit,
+                        'status_label'     => $plan->status ? 'Active' : 'Inactive',
+                    ];
+                });
             });
 
             return response()->json([
                 'success' => true,
-                'count'   => $data->count(),
+                'count'   => count($data),
                 'data'    => $data
             ], 200);
 
@@ -134,6 +148,7 @@ class PlanController extends Controller
             );
 
             $message = $request->filled('id') ? 'Plan updated successfully in DB & Stripe.' : 'Plan created successfully in DB & Stripe.';
+            self::clearPlanCache();
 
             return response()->json([
                 'success' => true,
@@ -208,6 +223,8 @@ class PlanController extends Controller
                 }
             }
 
+            self::clearPlanCache();
+
             return response()->json([
                 'success' => true,
                 'message' => 'Plan status updated successfully',
@@ -263,6 +280,7 @@ class PlanController extends Controller
         }
 
         $plan->delete();
+        self::clearPlanCache();
 
         return response()->json([
             'success' => true,
