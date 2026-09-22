@@ -99,7 +99,8 @@ class SupplyerController extends Controller
     public function userIndex()
 {
     try {
-        $users = User::where('user_type', 'individual')
+        $users = User::with('targetGoals')
+            ->where('user_type', 'individual')
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($user) {

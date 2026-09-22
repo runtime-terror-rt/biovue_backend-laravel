@@ -6,15 +6,18 @@ use App\Http\Controllers\Controller;
 use App\Models\AdsSetting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 
 class AdsController extends Controller
 {
     public function index()
     {
-        $ads = AdsSetting::where('end_date', '>=', now()->toDateString())
-            ->where('status', true)
-            ->orWhereNull('end_date')
-            ->get();
+        $ads = Cache::remember('active_ads_list', 1800, function () {
+            return AdsSetting::where('end_date', '>=', now()->toDateString())
+                ->where('status', true)
+                ->orWhereNull('end_date')
+                ->get();
+        });
 
         return response()->json([
             'success' => true,
@@ -89,6 +92,8 @@ class AdsController extends Controller
             
         );
 
+        Cache::forget('active_ads_list');
+
         $status = $ad ? 'updated' : 'created';
 
         return response()->json([
@@ -123,6 +128,7 @@ class AdsController extends Controller
 
         // ৪. ডাটাবেস থেকে রেকর্ডটি ডিলিট করা
         $ad->delete();
+        Cache::forget('active_ads_list');
 
         return response()->json([
             'success' => true,
@@ -143,6 +149,7 @@ class AdsController extends Controller
         $ad = AdsSetting::findOrFail($id);
         $ad->status = !$ad->status;
         $ad->save();
+        Cache::forget('active_ads_list');
 
         return response()->json([
             'success' => true,

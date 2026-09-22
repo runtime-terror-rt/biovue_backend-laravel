@@ -18,7 +18,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $projectionCredits = ProjectionCredit::all()->keyBy('user_id');
+        $projectionCredits = ProjectionCredit::select('user_id', 'projection_limit')->get()->keyBy('user_id');
         $users = User::with('profile', 'medicalHistory')->get();
         foreach ($users as $user) {
             $user->projection_limit = $projectionCredits->get($user->id)->projection_limit ?? 0;
