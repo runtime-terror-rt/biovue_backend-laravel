@@ -122,7 +122,10 @@ class UserNutritionCalculateController extends Controller
         $foodToRemove = trim($request->food);
 
         $records = UserNutritionCalculate::where('user_id', $userId)
-            ->whereDate('log_date', $logDate)
+            ->where(function($q) use ($logDate) {
+                $q->whereDate('log_date', $logDate)
+                  ->orWhereDate('created_at', $logDate);
+            })
             ->get();
 
         if ($records->isEmpty()) {
@@ -139,7 +142,12 @@ class UserNutritionCalculateController extends Controller
             $newFoods = [];
             $foundInRecord = false;
             foreach ($foods as $f) {
-                if (!$foundInRecord && strcasecmp(trim($f), $foodToRemove) === 0) {
+                $trimmedF = trim((string)$f);
+                $isMatch = (strcasecmp($trimmedF, $foodToRemove) === 0) 
+                    || (stripos($trimmedF, $foodToRemove) !== false)
+                    || (stripos($foodToRemove, $trimmedF) !== false);
+
+                if (!$foundInRecord && $isMatch) {
                     $foundInRecord = true;
                     $removed = true;
                     continue; // Skip this one instance
@@ -169,6 +177,21 @@ class UserNutritionCalculateController extends Controller
         }
 
         $aggregated = $this->aggregateForDate($userId, $logDate);
+        if ($aggregated === null) {
+            $aggregated = [
+                'log_date' => $logDate,
+                'nutrition' => [
+                    'calories' => ['value' => 0, 'unit' => 'kcal'],
+                    'macros' => [
+                        'protein' => ['value' => 0, 'unit' => 'g'],
+                        'carbs'   => ['value' => 0, 'unit' => 'g'],
+                        'fat'     => ['value' => 0, 'unit' => 'g'],
+                    ],
+                    'total' => 0,
+                    'foods' => []
+                ]
+            ];
+        }
 
         return response()->json([
             'success' => true,

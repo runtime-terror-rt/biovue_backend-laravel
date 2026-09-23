@@ -188,6 +188,77 @@ class SupplyerController extends Controller
                 ];
             }
 
+            if (empty($matches)) {
+                // Fallback to client profile body goal, fitness goals or published catalog
+                $profile = $user->profile;
+                $fallbackKeywords = [];
+                if ($profile) {
+                    if ($profile->muscular) $fallbackKeywords[] = 'Protein';
+                    if ($profile->lean || $profile->toned) $fallbackKeywords[] = 'Energy';
+                    if ($profile->is_athletic) $fallbackKeywords[] = 'Performance';
+                    if ($profile->curvy_fit) $fallbackKeywords[] = 'Recovery';
+                    if (!empty($profile->specialties)) {
+                        $fallbackKeywords = array_merge($fallbackKeywords, (array)$profile->specialties);
+                    }
+                }
+                if (empty($fallbackKeywords)) {
+                    $fallbackKeywords = ['Supplements', 'Health'];
+                }
+
+                foreach ($fallbackKeywords as $keyword) {
+                    $keyword = trim($keyword);
+                    if (empty($keyword)) continue;
+
+                    $products = Product::where('status', 'published')
+                        ->where(function ($q) use ($keyword) {
+                            $q->where('name', 'LIKE', "%{$keyword}%")
+                              ->orWhere('description', 'LIKE', "%{$keyword}%")
+                              ->orWhere('category', 'LIKE', "%{$keyword}%");
+                        })
+                        ->get()
+                        ->map(function ($p) {
+                            return [
+                                'id'            => $p->id,
+                                'name'          => $p->name,
+                                'price'         => '$' . number_format($p->price, 2),
+                                'redirect_url'  => $p->redirect_url,
+                                'image'         => $p->image ? (str_starts_with($p->image, 'http') ? $p->image : asset('storage/' . $p->image)) : null,
+                            ];
+                        });
+
+                    if ($products->isNotEmpty()) {
+                        $matches[] = [
+                            'recommended_supplement' => $keyword,
+                            'matched_products_count' => $products->count(),
+                            'products'               => $products,
+                        ];
+                    }
+                }
+
+                // If still empty, return all top published supplier products as general recommendation
+                if (empty($matches)) {
+                    $allPublished = Product::where('status', 'published')
+                        ->latest()
+                        ->take(10)
+                        ->get()
+                        ->map(function ($p) {
+                            return [
+                                'id'            => $p->id,
+                                'name'          => $p->name,
+                                'price'         => '$' . number_format($p->price, 2),
+                                'redirect_url'  => $p->redirect_url,
+                                'image'         => $p->image ? (str_starts_with($p->image, 'http') ? $p->image : asset('storage/' . $p->image)) : null,
+                            ];
+                        });
+
+                    $matches[] = [
+                        'recommended_supplement' => 'Featured Wellness Supplements',
+                        'matched_products_count' => $allPublished->count(),
+                        'products'               => $allPublished,
+                    ];
+                }
+            }
+
             return response()->json([
                 'success' => true,
                 'client'  => [

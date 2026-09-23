@@ -67,6 +67,38 @@ class UserController extends Controller
         }
     }
 
+    public function professionalUsers(Request $request)
+    {
+        try {
+            $query = User::role('professional');
+
+            if ($request->has('email')) {
+                $email = $request->email;
+                $query->where('email', 'like', "%{$email}%");
+            }
+
+            $users = $query->select('id', 'name', 'email', 'profession_type')->get();
+
+            if ($users->isEmpty()) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'No professional users found.'
+                ], 404);
+            }
+
+            return response()->json([
+                'status' => true,
+                'data' => $users
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Failed to fetch professional users. Error: '.$e->getMessage()
+            ], 500);
+        }
+    }
+
 
     public function getUserReport(Request $request)
     {
@@ -350,11 +382,88 @@ class UserController extends Controller
     /**
      * Helper to determine BMI Status
      */
-    private function getBmiStatus($bmi) {
+    public function getBmiStatus($bmi) {
         if ($bmi < 18.5) return 'Underweight';
         if ($bmi <= 24.9) return 'Healthy weight';
         if ($bmi <= 29.9) return 'Overweight';
         return 'Obese range';
+    }
+
+    /**
+     * Smart BMI calculation that automatically handles inches, feet, cm, lbs, kg
+     * regardless of whether unit is imperial or metric or mixed dirty data.
+     */
+    public function calculateSmartBMI($weight, $height, $unit = 'imperial')
+    {
+        $weight = (float) $weight;
+        $height = (float) $height;
+
+        if ($weight <= 0 || $height <= 0) {
+            return 0;
+        }
+
+        // Smart height normalization to meters
+        if ($height > 100) {
+            // cm (e.g. 150-220 cm)
+            $heightInMeters = $height / 100;
+        } elseif ($height <= 10) {
+            // feet (e.g. 5.5, 5.8, 6.0 ft)
+            $heightInMeters = $height * 0.3048;
+        } else {
+            // inches (e.g. 50-90 inches)
+            $heightInMeters = $height * 0.0254;
+        }
+
+        if ($heightInMeters <= 0.4) {
+            return 0;
+        }
+
+        // Smart weight normalization to kg
+        if ($unit === 'imperial') {
+            $weightInKg = $weight * 0.453592;
+        } else {
+            // If metric, but user likely entered lbs (> 140 lbs)
+            if ($weight > 140 && ($weight / ($heightInMeters * $heightInMeters)) > 55) {
+                $weightInKg = $weight * 0.453592;
+            } else {
+                $weightInKg = $weight;
+            }
+        }
+
+        $bmi = round($weightInKg / ($heightInMeters * $heightInMeters), 1);
+
+        // Safeguard check against unrealistic numbers
+        if ($bmi > 80 && $height > 10 && $height <= 100) {
+            $altHeightMeters = $height * 0.0254;
+            $altBmi = round($weightInKg / ($altHeightMeters * $altHeightMeters), 1);
+            if ($altBmi >= 15 && $altBmi <= 60) {
+                return $altBmi;
+            }
+        }
+
+        return $bmi;
+    }
+
+    /**
+     * Helper to get accurate nutrition logs from both user_nutrition_calculates and nutrition_logs
+     */
+    private function getNutritionLogsCollection($userId, $startDate, $endDate)
+    {
+        $calculates = \App\Models\AI\UserNutritionCalculate::where('user_id', $userId)
+            ->where(function($q) use ($startDate, $endDate) {
+                $q->whereBetween('log_date', [$startDate, $endDate])
+                  ->orWhereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+            })
+            ->get();
+
+        if ($calculates->isNotEmpty()) {
+            return $calculates;
+        }
+
+        return DB::table('nutrition_logs')
+            ->where('user_id', $userId)
+            ->whereBetween('log_date', [$startDate, $endDate])
+            ->get();
     }
 
     private function calculateWellnessScore($userId)
@@ -364,12 +473,11 @@ class UserController extends Controller
 
         $activityCount = DB::table('activity_logs')->where('user_id', $userId)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->count();
         $avgStress = DB::table('stress_logs')->where('user_id', $userId)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->avg('stress_level') ?? 3;
-        $nutritionCount = DB::table('nutrition_logs')->where('user_id', $userId)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->count();
+        $nutritionLogs = $this->getNutritionLogsCollection($userId, $startOfWeek, $endOfWeek);
+        $nutritionCount = $nutritionLogs->count();
 
         $activityScore = min(($activityCount / 7) * 50, 50);
-        
         $nutritionScore = min(($nutritionCount / 7) * 30, 30);
-        
         $stressScore = (5 - $avgStress) * 4;
 
         return round($activityScore + $nutritionScore + $stressScore);
@@ -389,24 +497,32 @@ class UserController extends Controller
         $unitLabel = ($unit === 'imperial') ? 'lbs' : 'kg';
 
         $activityLogs = DB::table('activity_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
-        $nutritionLogs = DB::table('nutrition_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
+        $hydrationLogs = DB::table('hydration_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
+        $sleepLogs = DB::table('sleep_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
         $stressLogs = DB::table('stress_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
+        $nutritionLogs = $this->getNutritionLogsCollection($id, $startDate, $endDate);
 
         // Weight Logic
         $latestWeight = $activityLogs->whereNotNull('weight')->last()->weight ?? ($user->profile->weight ?? 0);
         $targetWeight = $user->targetGoals->target_weight ?? 0;
 
-        // BMI Calculation
-        $bmiScore = 0;
+        // Smart BMI Calculation
         $height = $user->profile->height ?? 0;
-        if ($height > 0 && $latestWeight > 0) {
-            $weightInKg = ($unit === 'imperial') ? $latestWeight * 0.453592 : $latestWeight;
-            $heightInMeters = $height / 100;
-            $bmiScore = round($weightInKg / ($heightInMeters * $heightInMeters), 1);
-        }
+        $bmiScore = $this->calculateSmartBMI($latestWeight, $height, $unit);
 
         $nutritionEntriesCount = $nutritionLogs->count();
         $nutritionScore = min(($nutritionEntriesCount / $days) * 100, 100); 
+
+        // Sleep hours: check sleep_logs first, fallback to activityLogs
+        $avgSleep = $sleepLogs->isNotEmpty() ? round($sleepLogs->avg('sleep_hours'), 1) : round($activityLogs->avg('sleep_hours') ?? 0, 1);
+
+        // Hydration average
+        $avgGlasses = round($hydrationLogs->avg('water_glasses') ?? 0, 1);
+        $avgOz = round($hydrationLogs->avg('water_oz') ?? ($avgGlasses * 8), 1);
+        if ($avgGlasses > 30) {
+            $avgOz = $avgGlasses;
+            $avgGlasses = round($avgOz / 8, 1);
+        }
 
         return response()->json([
             'success' => true,
@@ -423,7 +539,8 @@ class UserController extends Controller
                 ],
                 'nutrition_quality' => [
                     'score' => round($nutritionScore), 
-                    'status' => $nutritionLogs->last()->meal_balance ?? 'Balanced',
+                    'entries_count' => $nutritionEntriesCount,
+                    'status' => $nutritionLogs->last()->meal_balance ?? ($nutritionEntriesCount > 0 ? 'Logged' : 'No entries'),
                     'coach_note' => $user->adjustProgram->note ?? "Improve consistency on weekends"
                 ],
                 'daily_steps' => [
@@ -431,8 +548,16 @@ class UserController extends Controller
                     'coach_plan' => number_format($user->targetGoals->daily_step_goal ?? 0) . " steps"
                 ],
                 'sleep_hours' => [
-                    'current' => round($activityLogs->avg('sleep_hours') ?? 0, 1) . " Hrs",
+                    'current' => $avgSleep . " Hrs",
                     'coach_plan' => $user->adjustProgram->sleep_target_range ?? '7-8 Hrs'
+                ],
+                'hydration' => [
+                    'current' => $avgGlasses . " Glasses (" . $avgOz . " oz)",
+                    'coach_target' => ($user->targetGoals->water_target ?? 8) . " Glasses"
+                ],
+                'stress' => [
+                    'current' => round($stressLogs->avg('stress_level') ?? 0, 1) . "/10",
+                    'status' => (round($stressLogs->avg('stress_level') ?? 0, 1) <= 4) ? "Low Stress" : "Need Attention"
                 ]
             ]
         ]);
@@ -456,19 +581,28 @@ class UserController extends Controller
         $hydrationLogs = DB::table('hydration_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
         $sleepLogs = DB::table('sleep_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
         $stressLogs = DB::table('stress_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
-        $nutritionLogs = DB::table('nutrition_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
+        $nutritionLogs = $this->getNutritionLogsCollection($id, $startDate, $endDate);
 
         $latestWeight = $activityLogs->whereNotNull('weight')->last()->weight ?? ($user->profile->weight ?? 0);
         $targetWeight = $user->targetGoals->target_weight ?? 0;
         
-        // BMI Logic
-        $bmiScore = 0;
+        // Smart BMI Logic
         $height = $user->profile->height ?? 0;
-        if ($height > 0 && $latestWeight > 0) {
-            $weightInKg = ($unit === 'imperial') ? $latestWeight * 0.453592 : $latestWeight;
-            $heightInMeters = $height / 100;
-            $bmiScore = round($weightInKg / ($heightInMeters * $heightInMeters), 1);
+        $bmiScore = $this->calculateSmartBMI($latestWeight, $height, $unit);
+
+        // Sleep hours: check sleep_logs first, fallback to activityLogs
+        $avgSleep = $sleepLogs->isNotEmpty() ? round($sleepLogs->avg('sleep_hours'), 1) : round($activityLogs->avg('sleep_hours') ?? 0, 1);
+
+        // Hydration average: sanitize corrupted entries
+        $avgHydrationGlasses = round($hydrationLogs->avg('water_glasses') ?? 0, 1);
+        $avgHydrationOz = round($hydrationLogs->avg('water_oz') ?? ($avgHydrationGlasses * 8), 1);
+        if ($avgHydrationGlasses > 30) {
+            $avgHydrationOz = $avgHydrationGlasses;
+            $avgHydrationGlasses = round($avgHydrationOz / 8, 1);
         }
+
+        $nutritionCount = $nutritionLogs->count();
+        $nutritionScore = min(($nutritionCount / $days) * 100, 100);
 
         return response()->json([
             'success' => true,
@@ -486,7 +620,7 @@ class UserController extends Controller
                         'status' => "Activity log consistency"
                     ],
                     'data_logged' => [
-                        'count' => $activityLogs->count() + $nutritionLogs->count() + $stressLogs->count(),
+                        'count' => $activityLogs->count() + $nutritionCount + $stressLogs->count() + $sleepLogs->count() + $hydrationLogs->count(),
                         'label' => "Entries in selected period"
                     ]
                 ],
@@ -504,9 +638,10 @@ class UserController extends Controller
                         'status' => $this->getBmiStatus($bmiScore)
                     ],
                     'nutrition' => [
-                        'score' => min(($nutritionLogs->count() / $days) * 100, 100), 
-                        'status' => $nutritionLogs->last()->meal_balance ?? 'Balanced',
-                        'message' => "Your meals are fueling you well"
+                        'score' => round($nutritionScore), 
+                        'entries_count' => $nutritionCount,
+                        'status' => $nutritionLogs->last()->meal_balance ?? ($nutritionCount > 0 ? 'Consistent' : 'No entries'),
+                        'message' => $nutritionCount > 0 ? "Meals successfully tracked" : "Log meals to track fuel"
                     ],
                     'workouts' => [
                         'completed' => $activityLogs->where('daily_steps', '>', 5000)->count(),
@@ -518,16 +653,24 @@ class UserController extends Controller
                         'goal' => ($user->targetGoals->daily_step_goal ?? 8000) . " steps"
                     ],
                     'sleep' => [
-                        'avg' => round($sleepLogs->avg('sleep_hours') ?? 0, 1),
+                        'avg' => $avgSleep,
                         'goal' => "7-9 hours"
+                    ],
+                    'hydration' => [
+                        'current' => $avgHydrationGlasses . " Glasses (" . $avgHydrationOz . " oz)",
+                        'goal' => ($user->targetGoals->water_target ?? 8) . " Glasses"
+                    ],
+                    'stress' => [
+                        'current' => round($stressLogs->avg('stress_level') ?? 0, 1) . "/10",
+                        'status' => (round($stressLogs->avg('stress_level') ?? 0, 1) <= 4) ? "Low Stress" : "Need Attention"
                     ]
                 ],
 
                 'consistency_metrics' => [
-                    $this->formatMetric("Sleep", $sleepLogs->avg('sleep_hours'), "hrs avg", $sleepLogs->count(), $days),
+                    $this->formatMetric("Sleep", $avgSleep, "hrs avg", $sleepLogs->isNotEmpty() ? $sleepLogs->count() : $activityLogs->whereNotNull('sleep_hours')->count(), $days),
                     $this->formatMetric("Activity", $activityLogs->avg('daily_steps'), "steps avg", $activityLogs->count(), $days, true),
-                    $this->formatMetric("Hydration", $hydrationLogs->avg('water_glasses'), "glasses avg", $hydrationLogs->count(), $days),
-                    $this->formatMetric("Nutrition", $nutritionLogs->count(), "entries total", $nutritionLogs->count(), $days),
+                    $this->formatMetric("Hydration", $avgHydrationGlasses, "glasses avg", $hydrationLogs->count(), $days),
+                    $this->formatMetric("Nutrition", $nutritionCount, "entries total", $nutritionCount, $days),
                     $this->formatMetric("Stress", $stressLogs->avg('stress_level'), "/10 level", $stressLogs->count(), $days)
                 ]
             ]
@@ -723,13 +866,27 @@ class UserController extends Controller
                 ->orderBy('log_date', 'asc')
                 ->get();
 
-            $nutritionLogs = \DB::table('user_nutrition_calculates')
+            $sleepLogs = \DB::table('sleep_logs')
                 ->where('user_id', $id)
-                ->whereBetween('created_at', [$startDate, $endDate])
-                ->orderBy('created_at', 'asc')
+                ->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->orderBy('log_date', 'asc')
                 ->get();
 
-            $chartData = $this->processChartData($days, $activityLogs, $nutritionLogs);
+            $hydrationLogs = \DB::table('hydration_logs')
+                ->where('user_id', $id)
+                ->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->orderBy('log_date', 'asc')
+                ->get();
+
+            $stressLogs = \DB::table('stress_logs')
+                ->where('user_id', $id)
+                ->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->orderBy('log_date', 'asc')
+                ->get();
+
+            $nutritionLogs = $this->getNutritionLogsCollection($id, $startDate->toDateString(), $endDate->toDateString());
+
+            $chartData = $this->calculateChartDetails($days, $activityLogs, $nutritionLogs, $sleepLogs, $hydrationLogs, $stressLogs);
 
             return response()->json([
                 'success' => true,
@@ -764,12 +921,24 @@ class UserController extends Controller
                 ->whereBetween('log_date', [$startDate, $endDate])
                 ->get();
 
-            $nutritionLogs = \DB::table('user_nutrition_calculates')
+            $sleepLogs = \DB::table('sleep_logs')
                 ->where('user_id', $id)
-                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                ->whereBetween('log_date', [$startDate, $endDate])
                 ->get();
 
-            $data = $this->calculateChartDetails($days, $activityLogs, $nutritionLogs);
+            $hydrationLogs = \DB::table('hydration_logs')
+                ->where('user_id', $id)
+                ->whereBetween('log_date', [$startDate, $endDate])
+                ->get();
+
+            $stressLogs = \DB::table('stress_logs')
+                ->where('user_id', $id)
+                ->whereBetween('log_date', [$startDate, $endDate])
+                ->get();
+
+            $nutritionLogs = $this->getNutritionLogsCollection($id, $startDate, $endDate);
+
+            $data = $this->calculateChartDetails($days, $activityLogs, $nutritionLogs, $sleepLogs, $hydrationLogs, $stressLogs);
 
             return response()->json([
                 'success' => true,
@@ -782,12 +951,18 @@ class UserController extends Controller
         }
     }
 
-    protected function calculateChartDetails($days, $activityLogs, $nutritionLogs)
+    protected function calculateChartDetails($days, $activityLogs, $nutritionLogs, $sleepLogs = null, $hydrationLogs = null, $stressLogs = null)
     {
+        $sleepLogs = $sleepLogs ?? collect();
+        $hydrationLogs = $hydrationLogs ?? collect();
+        $stressLogs = $stressLogs ?? collect();
+
         $labels = [];
         $weightData = [];
         $stepData = [];
         $sleepData = [];
+        $hydrationData = [];
+        $stressData = [];
         $protein = []; $carbs = []; $fats = [];
 
         for ($i = $days - 1; $i >= 0; $i--) {
@@ -796,11 +971,41 @@ class UserController extends Controller
             $labels[] = ($days <= 7) ? now()->subDays($i)->format('D') : now()->subDays($i)->format('M d');
 
             $log = $activityLogs->where('log_date', $date)->first();
+            $sleepLog = $sleepLogs->where('log_date', $date)->first();
+            $hydrationLog = $hydrationLogs->where('log_date', $date)->first();
+            $stressLog = $stressLogs->where('log_date', $date)->first();
+
             $weightData[] = $log ? (float)$log->weight : null;
             $stepData[] = $log ? (int)$log->daily_steps : 0;
-            $sleepData[] = $log ? (float)$log->sleep_hours : 0;
+            
+            // Sleep: preference to sleep_logs, fallback to activity_logs
+            if ($sleepLog && isset($sleepLog->sleep_hours)) {
+                $sleepData[] = (float)$sleepLog->sleep_hours;
+            } elseif ($log && isset($log->sleep_hours)) {
+                $sleepData[] = (float)$log->sleep_hours;
+            } else {
+                $sleepData[] = 0;
+            }
 
-            $dayNutri = $nutritionLogs->filter(fn($n) => date('Y-m-d', strtotime($n->created_at)) == $date);
+            // Hydration
+            if ($hydrationLog) {
+                $rawGlasses = (float)$hydrationLog->water_glasses;
+                if ($rawGlasses > 30) {
+                    $hydrationData[] = round($rawGlasses / 8, 1);
+                } else {
+                    $hydrationData[] = $rawGlasses;
+                }
+            } else {
+                $hydrationData[] = 0;
+            }
+
+            // Stress
+            $stressData[] = $stressLog ? (float)$stressLog->stress_level : 0;
+
+            $dayNutri = $nutritionLogs->filter(function($n) use ($date) {
+                $createdDate = isset($n->log_date) ? date('Y-m-d', strtotime($n->log_date)) : date('Y-m-d', strtotime($n->created_at));
+                return $createdDate == $date;
+            });
             $p = $dayNutri->sum('protein_value');
             $c = $dayNutri->sum('carbs_value');
             $f = $dayNutri->sum('fat_value');
@@ -815,6 +1020,8 @@ class UserController extends Controller
             'weight' => ['labels' => $labels, 'data' => $weightData, 'total_progress' => $this->getWeightDiff($activityLogs)],
             'activity' => ['labels' => $labels, 'data' => $stepData],
             'sleep' => ['labels' => $labels, 'data' => $sleepData],
+            'hydration' => ['labels' => $labels, 'data' => $hydrationData],
+            'stress' => ['labels' => $labels, 'data' => $stressData],
             'nutrition' => [
                 'labels' => $labels,
                 'datasets' => [
@@ -952,6 +1159,16 @@ class UserController extends Controller
                 ->whereBetween('log_date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()])
                 ->get();
 
+            $hydration = DB::table('hydration_logs')
+                ->where('user_id', $targetId)
+                ->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->get();
+
+            $stress = DB::table('stress_logs')
+                ->where('user_id', $targetId)
+                ->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
+                ->get();
+
             $chartData = [];
             $period = \Carbon\CarbonPeriod::create($startDate, $endDate);
 
@@ -960,16 +1177,26 @@ class UserController extends Controller
                 
                 $actLog = $activity->where('log_date', $formattedDate)->first();
                 $slpLog = $sleep->where('log_date', $formattedDate)->first();
+                $hydLog = $hydration->where('log_date', $formattedDate)->first();
+                $strLog = $stress->where('log_date', $formattedDate)->first();
                 
                 $nutLog = $nutrition->filter(function($item) use ($formattedDate) {
-                    return date('Y-m-d', strtotime($item->log_date)) == $formattedDate;
+                    $itemDate = isset($item->log_date) ? date('Y-m-d', strtotime($item->log_date)) : date('Y-m-d', strtotime($item->created_at));
+                    return $itemDate == $formattedDate;
                 })->first();
+
+                $rawHydrationGlasses = $hydLog ? (float)$hydLog->water_glasses : 0;
+                if ($rawHydrationGlasses > 30) {
+                    $rawHydrationGlasses = round($rawHydrationGlasses / 8, 1);
+                }
 
                 $chartData[] = [
                     'label' => $date->format('D'), 
                     'weight' => $actLog ? (float)$actLog->weight : null,
                     'steps' => $actLog ? (int)$actLog->daily_steps : 0,
-                    'sleep_hours' => $slpLog ? (float)$slpLog->sleep_hours : 0,
+                    'sleep_hours' => $slpLog ? (float)$slpLog->sleep_hours : ($actLog ? (float)$actLog->sleep_hours : 0),
+                    'hydration' => $rawHydrationGlasses,
+                    'stress' => $strLog ? (float)$strLog->stress_level : 0,
                     'nutrition' => [
                         'protein' => $nutLog ? (float)$nutLog->protein_value : 0,
                         'carbs'   => $nutLog ? (float)$nutLog->carbs_value : 0,
@@ -978,16 +1205,15 @@ class UserController extends Controller
                 ];
             }
 
-            $hydration = DB::table('hydration_logs')
-                ->where('user_id', $targetId)
-                ->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
-                ->get();
-
             $latestWeight = $activity->last()->weight ?? ($userData->profile->weight ?? 0);
             $targetGoal = $userData->targetGoals;
 
             $avgDailyGlasses = round($hydration->avg('water_glasses') ?? 0, 1);
             $avgDailyOz = round($hydration->avg('water_oz') ?? ($avgDailyGlasses * 8), 1);
+            if ($avgDailyGlasses > 30) {
+                $avgDailyOz = $avgDailyGlasses;
+                $avgDailyGlasses = round($avgDailyOz / 8, 1);
+            }
             $projectionsCount = DB::table('projection_data')->where('user_id', $targetId)->count();
 
             return response()->json([

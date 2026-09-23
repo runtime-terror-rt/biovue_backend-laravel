@@ -35,12 +35,13 @@ class ActivityController extends Controller
             'water_glasses' => 'nullable|integer|min:0',
         ]);
 
+        $matchConditions = ['user_id' => Auth::id(), 'log_date' => $validated['log_date']];
+        if ($request->filled('id')) {
+            $matchConditions = ['user_id' => Auth::id(), 'id' => $request->id];
+        }
+
         $activity = ActivityLog::updateOrCreate(
-            [
-                'user_id'  => Auth::id(),
-                'id' => $request->id ?? null,
-                'log_date' => $validated['log_date']
-            ],
+            $matchConditions,
             $validated
         );
 

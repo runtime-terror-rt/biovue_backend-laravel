@@ -38,15 +38,19 @@ class HydrationController extends Controller
         $waterOz = isset($validated['water_oz']) ? (float)$validated['water_oz'] : null;
         $waterGlasses = isset($validated['water_glasses']) ? (float)$validated['water_glasses'] : null;
 
-        if ($waterOz !== null && $waterGlasses === null) {
+        // Auto-correct any user/client input mixup (e.g. 100 oz entered as glasses, or multiplied to 800)
+        if ($waterGlasses !== null && $waterGlasses > 30) {
+            $waterOz = $waterGlasses;
+            $waterGlasses = round($waterOz / 8, 1);
+        } elseif ($waterOz !== null && $waterGlasses === null) {
             $waterGlasses = round($waterOz / 8, 1);
         } elseif ($waterGlasses !== null && $waterOz === null) {
-            if ($waterGlasses > 30) {
-                // If a user entered 64 or 100 ounces into glasses input, treat as ounces
+            $waterOz = round($waterGlasses * 8, 1);
+        } elseif ($waterOz !== null && $waterGlasses !== null) {
+            if ($waterOz > 250 && abs($waterOz - ($waterGlasses * 8)) < 0.1 && $waterGlasses > 20) {
+                // Clearly multiplied ounces by 8 (e.g. 100 entered as glasses, then 800 oz generated)
                 $waterOz = $waterGlasses;
                 $waterGlasses = round($waterOz / 8, 1);
-            } else {
-                $waterOz = round($waterGlasses * 8, 1);
             }
         }
 
@@ -54,11 +58,13 @@ class HydrationController extends Controller
         $validated['water_glasses'] = $waterGlasses !== null ? (int)round($waterGlasses) : 0;
         $validated['unit'] = $validated['unit'] ?? 'oz';
 
+        $matchConditions = ['user_id' => Auth::id(), 'log_date' => $validated['log_date']];
+        if ($request->filled('id')) {
+            $matchConditions = ['user_id' => Auth::id(), 'id' => $request->id];
+        }
+
         $activity = HydrationLog::updateOrCreate(
-            [
-                'user_id'  => Auth::id(),
-                'log_date' => $validated['log_date']
-            ],
+            $matchConditions,
             $validated
         );
 

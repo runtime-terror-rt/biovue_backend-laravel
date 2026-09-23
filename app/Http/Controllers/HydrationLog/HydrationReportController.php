@@ -52,12 +52,27 @@ class HydrationReportController extends Controller
                 $currentDate = now()->subDays(($days - 1) - $i)->format('Y-m-d');
                 $log = $hydrationData->get($currentDate);
                 
-                $glasses = $log ? (float) $log->water_glasses : 0;
+                $rawGlasses = $log ? (float) $log->water_glasses : 0;
+                $rawOz = $log && isset($log->water_oz) ? (float) $log->water_oz : 0;
+
+                // On-the-fly normalization for historical corrupted entries (e.g. 100 oz stored as glasses)
+                if ($rawGlasses > 30) {
+                    $glasses = round($rawGlasses / 8, 1);
+                    $oz = $rawGlasses;
+                } elseif ($rawOz > 0 && $rawGlasses == 0) {
+                    $glasses = round($rawOz / 8, 1);
+                    $oz = $rawOz;
+                } else {
+                    $glasses = $rawGlasses;
+                    $oz = $rawOz > 0 ? $rawOz : round($rawGlasses * 8, 1);
+                }
+
                 $totalGlasses += $glasses;
 
                 $chartData[] = [
                     'label' => $days > 15 ? \Carbon\Carbon::parse($currentDate)->format('d M') : \Carbon\Carbon::parse($currentDate)->format('D'),
                     'glasses' => $glasses,
+                    'water_oz' => $oz,
                     'target' => (float) $waterTarget,
                 ];
 
@@ -77,8 +92,8 @@ class HydrationReportController extends Controller
                     'period' => "Past $days Days",
                     'chart_data' => $chartData,
                     'statistics' => [
-                        'average_water' => round($avgWater, 1) . ' Glasses',
-                        'water_target' => round($waterTarget, 1) . ' Glasses',
+                        'average_water' => round($avgWater, 1) . ' Glasses (' . round($avgWater * 8, 1) . ' oz)',
+                        'water_target' => round($waterTarget, 1) . ' Glasses (' . round($waterTarget * 8, 1) . ' oz)',
                         'best_streak' => $this->calculateStreak($id, 'hydration_logs') . ' DAYS',
                         'consistency' => $consistency . '%',
                         'current_trend' => $currentTrend 

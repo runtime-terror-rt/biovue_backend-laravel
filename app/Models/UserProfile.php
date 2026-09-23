@@ -21,6 +21,13 @@ class UserProfile extends Model
         );
     }
 
+    protected function currentImage(): Attribute
+    {
+        return Attribute::make(
+            get: fn ($value) => $value ? (str_starts_with($value, 'http') ? $value : asset('storage/' . $value)) : null,
+        );
+    }
+
     protected $casts = [
         'specialties' => 'array',
         'services' => 'array',

@@ -52,10 +52,15 @@ class TrainerController extends Controller
         }
     }
 
-    public function professionalClientCard()
+    public function professionalClientCard(Request $request)
     {
         try {
-            $user = auth()->user();
+            $targetUserId = $request->query('user_id') 
+                ?? $request->query('client_id') 
+                ?? $request->input('user_id') 
+                ?? auth()->id();
+
+            $user = User::with(['profile', 'targetGoals'])->find($targetUserId) ?: auth()->user();
             $userId = $user->id;
 
             $profile = $user->profile; 
@@ -79,6 +84,11 @@ class TrainerController extends Controller
             $lastActiveTime = "No activity";
             if ($userSession) {
                 $lastActiveTime = \Carbon\Carbon::createFromTimestamp($userSession->last_activity)->diffForHumans();
+            } else {
+                $lastLog = \App\Models\ActivityLog::where('user_id', $userId)->latest('log_date')->first();
+                if ($lastLog) {
+                    $lastActiveTime = \Carbon\Carbon::parse($lastLog->log_date)->diffForHumans();
+                }
             }
 
             $consistencyScore = 0;
@@ -90,12 +100,18 @@ class TrainerController extends Controller
             }
             $trendStatus = ($user->status == 'on_track') ? "Improving" : "Struggling";
 
-            $projectionsCount = \App\Models\Projection::where('user_id', $userId)
-                                ->whereMonth('created_at', now()->month)->count();
+            $projectionsCount = \DB::table('projection_data')->where('user_id', $userId)->count()
+                ?: \App\Models\Projection::where('user_id', $userId)->whereMonth('created_at', now()->month)->count();
+
+            $creditRecord = \App\Models\ProjectionCredit::where('user_id', $userId)->first();
+            $projectionLimit = $creditRecord?->projection_limit ?? 10;
+            $daysUntilReset = max(1, now()->endOfMonth()->diffInDays(now()));
 
             return response()->json([
                 'success' => true,
                 'data' => [
+                    'client_id' => $userId,
+                    'client_name' => $user->name,
                     'primary_goal' => [
                         'title' => $primaryGoalTitle,
                         'subtitle' => "Program duration {$programDuration} weeks"
@@ -106,16 +122,15 @@ class TrainerController extends Controller
                     ],
                     'last_activity' => [
                         'time' => $lastActiveTime == "No activity" ? $lastActiveTime : "Logged " . $lastActiveTime,
-                        'meta' => "Status: " . ucfirst($user->status)
+                        'meta' => "Status: " . ucfirst($user->status ?? 'active')
                     ],
                     'consistency_score' => [
                         'score' => min($consistencyScore, 100) . '%',
                         'meta' => 'Habits adherence (Average)'
                     ],
                     'projection_usage' => [
-                        'used' => "{$projectionsCount}/10",
-                        //'reset_days' => "Next reset: " . now()->endOfMonth()->diffInDays(now()) . " days"
-                        'reset_days' => "Next reset: 18 days"
+                        'used' => "{$projectionsCount}/{$projectionLimit}",
+                        'reset_days' => "Next reset: {$daysUntilReset} days"
                     ]
                 ]
             ]);

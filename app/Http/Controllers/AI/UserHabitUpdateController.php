@@ -142,8 +142,12 @@ class UserHabitUpdateController extends Controller
             ->get()
             ->map(function($user) {
             $unit = $user->profile->unit ?? 'imperial';
-            $avgGlasses = $user->hydrationLogs()->avg('water_glasses') ?? 0;
-            $avgOz = $user->hydrationLogs()->avg('water_oz') ?? ($avgGlasses * 8);
+            $avgGlasses = round($user->hydrationLogs()->avg('water_glasses') ?? 0, 1);
+            $avgOz = round($user->hydrationLogs()->avg('water_oz') ?? ($avgGlasses * 8), 1);
+            if ($avgGlasses > 30) {
+                $avgOz = $avgGlasses;
+                $avgGlasses = round($avgOz / 8, 1);
+            }
 
             return [
                 'demographics' => [
@@ -177,14 +181,46 @@ class UserHabitUpdateController extends Controller
             return null;
         }
 
-        if ($unit === 'imperial') {
-            // Weight in lbs, height in inches
-            return round(($weight / ($height * $height)) * 703, 1);
+        // Smart height normalization to meters
+        if ($height > 100) {
+            // cm (e.g. 150-220 cm)
+            $heightInMeters = $height / 100;
+        } elseif ($height <= 10) {
+            // feet (e.g. 5.5, 5.8, 6.0 ft)
+            $heightInMeters = $height * 0.3048;
         } else {
-            // Weight in kg, height in cm
-            $heightMeters = $height > 3 ? $height / 100 : $height;
-            return round($weight / ($heightMeters * $heightMeters), 1);
+            // inches (e.g. 50-90 inches)
+            $heightInMeters = $height * 0.0254;
         }
+
+        if ($heightInMeters <= 0.4) {
+            return null;
+        }
+
+        // Smart weight normalization to kg
+        if ($unit === 'imperial') {
+            $weightInKg = $weight * 0.453592;
+        } else {
+            // If metric, but user likely entered lbs (> 140 lbs)
+            if ($weight > 140 && ($weight / ($heightInMeters * $heightInMeters)) > 55) {
+                $weightInKg = $weight * 0.453592;
+            } else {
+                $weightInKg = $weight;
+            }
+        }
+
+        $bmi = round($weightInKg / ($heightInMeters * $heightInMeters), 1);
+
+        // Safeguard check against unrealistic numbers
+        if ($bmi > 80 && $height > 10 && $height <= 100) {
+            $altHeightMeters = $height * 0.0254;
+            $altBmi = round($weightInKg / ($altHeightMeters * $altHeightMeters), 1);
+            if ($altBmi >= 15 && $altBmi <= 60) {
+                return $altBmi;
+            }
+        }
+
+        return $bmi;
     }
 
     
