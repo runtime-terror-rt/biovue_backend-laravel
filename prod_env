@@ -19,7 +19,7 @@ DB_HOST=mysql
 DB_PORT=3306
 DB_DATABASE=mamabot
 DB_USERNAME=laravel
-DB_PASSWORD=laravel_password
+DB_PASSWORD=***********
 
 
 SESSION_DRIVER=redis
@@ -44,7 +44,7 @@ MAIL_MAILER=smtp
 MAIL_HOST=smtp.zoho.com
 MAIL_PORT=465
 MAIL_USERNAME=info@biovuedigitalwellness.com
-MAIL_PASSWORD=28e332ew6vbj
+MAIL_PASSWORD=28e**********
 MAIL_ENCRYPTION=ssl
 MAIL_FROM_ADDRESS="info@biovuedigitalwellness.com"
 MAIL_FROM_NAME="${APP_NAME}"
@@ -59,15 +59,15 @@ VITE_APP_NAME="${APP_NAME}"
 
 FIREBASE_CREDENTIALS=storage/app/firebase/firebase_credentials.json
 
-STRIPE_KEY=pk_test_51SxsNj14ftaKygc9pYaqDWjGqg54TAEflzf6fnLlqbdkZH5KJ4TW80gvnEMr3qmZQKmDO4LTrms7znzqceNTIMA800DtjhBKmp
-STRIPE_SECRET=sk_test_51SxsNj14ftaKygc9x67uoISTxjyYahkIfTv2dGs1kziLk1nz77IZQYT53keHOzFXsMHLG8hdvykKvJP6W6IRzvoB005kkgEowM
+STRIPE_KEY=pk_test_51SxsNj14ftaKygc9pYaqDWjGqg54**************************************
+STRIPE_SECRET=sk_test_51SxsNj14ftaKygc9x67uoISTxjyYahkIfTv2dGs***********************************
 STRIPE_WEBHOOK_SECRET=whsec_LEtHxhaRAoG4zSggpFGTNID9sG8oXb5U
 CASHIER_CURRENCY=usd
 
 BROADCAST_CONNECTION=reverb
 REVERB_APP_ID=565460
-REVERB_APP_KEY=xkauprl1dzrq8jyz93vf
-REVERB_APP_SECRET=effge4xujnvd2xzkbnar
+REVERB_APP_KEY=xkauprl1dz**************
+REVERB_APP_SECRET=eff************
 REVERB_HOST=187.124.159.75
 REVERB_PORT=8080
 REVERB_SCHEME=http
@@ -77,5 +77,5 @@ VITE_REVERB_HOST="${REVERB_HOST}"
 VITE_REVERB_PORT="${REVERB_PORT}"
 VITE_REVERB_SCHEME="${REVERB_SCHEME}"
 
-NOCAPTCHA_SECRET=6Le1UbosAAAAALzL6FiHNld12GEMA6SUDbP-ZScL
-NOCAPTCHA_SITEKEY=6Le1UbosAAAAADe4wnH0slBvmP2io6LCLVusccXz
+NOCAPTCHA_SECRET=6Le1UbosAAAAA************
+NOCAPTCHA_SITEKEY=6Le1UbosAAAAADe4wnH0s****************
