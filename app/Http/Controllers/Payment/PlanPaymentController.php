@@ -47,12 +47,31 @@ class PlanPaymentController extends Controller
     {
         $user = auth()->user();
 
+        // Auto-sync if session_id is provided in URL
+        if ($request->filled('session_id')) {
+            $this->syncSessionById($request->query('session_id'));
+            $user->refresh();
+        }
+
         $payments = PlanPayment::with(['plan', 'targetPlan'])
             ->where('user_id', $user->id)
             ->latest()
             ->get();
 
         $latestPayment = $payments->first();
+
+        // Auto-sync if user has completed checkout on Stripe but webhook hasn't arrived
+        if ($latestPayment && $latestPayment->status === 'unpaid' && str_starts_with($latestPayment->transaction_id ?? '', 'cs_')) {
+            if ($this->syncSessionById($latestPayment->transaction_id)) {
+                $user->refresh();
+                $payments = PlanPayment::with(['plan', 'targetPlan'])
+                    ->where('user_id', $user->id)
+                    ->latest()
+                    ->get();
+                $latestPayment = $payments->first();
+            }
+        }
+
         $userPlan = $user->plan;
 
         $activeStripeSub = \App\Models\Subscription::where('user_id', $user->id)
@@ -318,6 +337,184 @@ class PlanPaymentController extends Controller
         }
     }
 
+    public function paymentSuccess(Request $request)
+    {
+        $sessionId = $request->query('session_id');
+        if ($sessionId) {
+            $this->syncSessionById($sessionId);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Payment session processed successfully',
+        ]);
+    }
+
+    public function syncSessionById(string $sessionId): bool
+    {
+        try {
+            $stripe = new StripeClient(config('services.stripe.secret'));
+            $session = $stripe->checkout->sessions->retrieve($sessionId);
+
+            if ($session && $session->status === 'complete') {
+                DB::beginTransaction();
+                $fulfilled = $this->fulfillCheckoutSession($session, $stripe);
+                DB::commit();
+                return $fulfilled;
+            }
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::warning("syncSessionById failed for {$sessionId}: " . $e->getMessage());
+        }
+
+        return false;
+    }
+
+    public function fulfillCheckoutSession($session, ?StripeClient $stripe = null): bool
+    {
+        if (!$stripe) {
+            $stripe = new StripeClient(config('services.stripe.secret'));
+        }
+
+        $paymentId = $session->metadata->payment_id ?? null;
+
+        $payment = $paymentId
+            ? PlanPayment::with(['user', 'plan'])->find($paymentId)
+            : PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
+
+        if (!$payment) {
+            Log::warning("fulfillCheckoutSession: Payment not found for session {$session->id}");
+            return false;
+        }
+
+        if (in_array($payment->status, ['paid', 'trialing'])) {
+            return true;
+        }
+
+        $subId = $session->subscription ?? null;
+        if (!$subId) {
+            return false;
+        }
+
+        $stripeSub = $stripe->subscriptions->retrieve($subId);
+
+        $trialEnds = $stripeSub->trial_end
+            ? \Carbon\Carbon::createFromTimestamp($stripeSub->trial_end)
+            : null;
+
+        $endsAt = $stripeSub->current_period_end
+            ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end)
+            : null;
+
+        $subscription = \App\Models\Subscription::updateOrCreate(
+            ['stripe_id' => $subId],
+            [
+                'user_id'       => $payment->user_id,
+                'type'          => 'default',
+                'stripe_status' => $stripeSub->status,
+                'stripe_price'  => $payment->amount,
+                'quantity'      => 1,
+                'trial_ends_at' => $trialEnds,
+                'ends_at'       => $endsAt,
+            ]
+        );
+
+        \App\Models\SubscriptionItem::updateOrCreate(
+            ['subscription_id' => $subscription->id],
+            [
+                'stripe_id'        => $subId,
+                'stripe_product'   => $payment->plan->name ?? 'N/A',
+                'stripe_price'     => $payment->amount,
+                'quantity'         => 1,
+                'meter_id'         => $stripeSub->metadata->meter_id ?? null,
+                'meter_event_name' => $stripeSub->metadata->meter_event_name ?? null,
+            ]
+        );
+
+        if ($stripeSub->status === 'trialing') {
+            // ===================================================
+            // 7-DAY FREE TRIAL ACTIVATION
+            // ===================================================
+            $targetPlanId = $session->metadata->target_plan_id ?? $payment->target_plan_id;
+            $targetPlan = $targetPlanId ? Plan::find($targetPlanId) : null;
+            $freeTrialPlan = Plan::where('price', 0)->orWhere('name', 'Free Trial')->first();
+
+            $payment->update([
+                'status'                 => 'trialing',
+                'stripe_subscription_id' => $subId,
+                'is_trial'               => true,
+                'target_plan_id'         => $targetPlanId,
+                'trial_ends_at'          => $trialEnds,
+                'start_date'             => now(),
+                'end_date'               => $trialEnds,
+            ]);
+
+            // Assign Free Trial plan & features during the trial period
+            $payment->user->update([
+                'plan_id'       => $freeTrialPlan?->id ?? $payment->user->plan_id,
+                'trial_ends_at' => $trialEnds,
+                'stripe_id'     => $session->customer ?? $payment->user->stripe_id,
+            ]);
+
+            if ($freeTrialPlan) {
+                ProjectionCredit::updateOrCreate(
+                    ['user_id' => $payment->user_id],
+                    [
+                        'projection_limit' => $freeTrialPlan->projection_limit ?? 1,
+                        'member_limit'     => $freeTrialPlan->member_limit,
+                        'expiry_date'      => $trialEnds,
+                        'updated_at'       => now(),
+                    ]
+                );
+            }
+
+            $admin = User::find(1);
+            if ($admin) {
+                $admin->notify(new AdminNotification(
+                    'New Trial Started',
+                    "{$payment->user->name} started 7-day trial with card on file (Target: " . ($targetPlan?->name ?? 'Paid Plan') . ")",
+                    'subscription'
+                ));
+            }
+
+            $targetName = $targetPlan ? $targetPlan->name : 'selected plan';
+            $payment->user->notify(new SubscriptionNotification(
+                'Free Trial Started',
+                "Your 7-day free trial is now active! Auto-billing for {$targetName} will occur on " . ($trialEnds ? $trialEnds->format('d M, Y') : 'in 7 days') . ".",
+                'subscription'
+            ));
+
+            Log::info("7-day trial started for User {$payment->user_id}, Payment ID {$payment->id}");
+
+        } else {
+            // ===================================================
+            // IMMEDIATE ACTIVE SUBSCRIPTION
+            // ===================================================
+            $duration = (int) ($session->metadata->duration_days ?? 30);
+            $this->activateSubscription($payment, $payment->user, $payment->plan, $subId, $duration);
+
+            if ($payment->plan->plan_type === 'api') {
+                $this->storeExternalApi($payment->user, $payment->plan, $duration, $subId);
+            }
+
+            $admin = User::find(1);
+            if ($admin) {
+                $admin->notify(new AdminNotification(
+                    'New Subscription',
+                    "{$payment->user->name} onboarded",
+                    'subscription'
+                ));
+            }
+            $payment->user->notify(new SubscriptionNotification(
+                'Success',
+                'Your subscription is active',
+                'subscription'
+            ));
+        }
+
+        return true;
+    }
+
     public function handleStripeWebhook(Request $request)
     {
         $payload        = $request->getContent();
@@ -337,140 +534,13 @@ class PlanPaymentController extends Controller
         // 1. CHECKOUT SESSION COMPLETED (Initial Card Setup / Trial / Direct Purchase)
         // =========================================================
         if ($event->type === 'checkout.session.completed') {
-            $session   = $event->data->object;
-            $paymentId = $session->metadata->payment_id ?? null;
+            $session = $event->data->object;
 
             DB::beginTransaction();
             try {
-                $payment = $paymentId
-                    ? PlanPayment::with(['user', 'plan'])->find($paymentId)
-                    : PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
-
-                if (!$payment || in_array($payment->status, ['paid', 'trialing'])) {
-                    DB::commit();
-                    return response('Already handled', 200);
-                }
-
-                $subId = $session->subscription ?? null;
-                if (!$subId) {
-                    DB::commit();
-                    return response('No subscription in session', 200);
-                }
-
-                $stripeSub = $stripe->subscriptions->retrieve($subId);
-
-                $trialEnds = $stripeSub->trial_end
-                    ? \Carbon\Carbon::createFromTimestamp($stripeSub->trial_end)
-                    : null;
-
-                $endsAt = $stripeSub->current_period_end
-                    ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end)
-                    : null;
-
-                $subscription = \App\Models\Subscription::updateOrCreate(
-                    ['stripe_id' => $subId],
-                    [
-                        'user_id'       => $payment->user_id,
-                        'type'          => 'default',
-                        'stripe_status' => $stripeSub->status,
-                        'stripe_price'  => $payment->amount,
-                        'quantity'      => 1,
-                        'trial_ends_at' => $trialEnds,
-                        'ends_at'       => $endsAt,
-                    ]
-                );
-
-                \App\Models\SubscriptionItem::updateOrCreate(
-                    ['subscription_id' => $subscription->id],
-                    [
-                        'stripe_id'        => $subId,
-                        'stripe_product'   => $payment->plan->name ?? 'N/A',
-                        'stripe_price'     => $payment->amount,
-                        'quantity'         => 1,
-                        'meter_id'         => $stripeSub->metadata->meter_id ?? null,
-                        'meter_event_name' => $stripeSub->metadata->meter_event_name ?? null,
-                    ]
-                );
-
-                if ($stripeSub->status === 'trialing') {
-                    // ===================================================
-                    // 7-DAY FREE TRIAL ACTIVATION
-                    // ===================================================
-                    $targetPlanId = $session->metadata->target_plan_id ?? $payment->target_plan_id;
-                    $targetPlan = $targetPlanId ? Plan::find($targetPlanId) : null;
-                    $freeTrialPlan = Plan::where('price', 0)->orWhere('name', 'Free Trial')->first();
-
-                    $payment->update([
-                        'status'                 => 'trialing',
-                        'stripe_subscription_id' => $subId,
-                        'is_trial'               => true,
-                        'target_plan_id'         => $targetPlanId,
-                        'trial_ends_at'          => $trialEnds,
-                        'start_date'             => now(),
-                        'end_date'               => $trialEnds,
-                    ]);
-
-                    // Assign Free Trial plan & features during the trial period
-                    if ($freeTrialPlan) {
-                        $payment->user->update(['plan_id' => $freeTrialPlan->id]);
-
-                        ProjectionCredit::updateOrCreate(
-                            ['user_id' => $payment->user_id],
-                            [
-                                'projection_limit' => $freeTrialPlan->projection_limit ?? 1,
-                                'member_limit'     => $freeTrialPlan->member_limit,
-                                'expiry_date'      => $trialEnds,
-                                'updated_at'       => now(),
-                            ]
-                        );
-                    }
-
-                    $admin = User::find(1);
-                    if ($admin) {
-                        $admin->notify(new AdminNotification(
-                            'New Trial Started',
-                            "{$payment->user->name} started 7-day trial with card on file (Target: " . ($targetPlan?->name ?? 'Paid Plan') . ")",
-                            'subscription'
-                        ));
-                    }
-
-                    $targetName = $targetPlan ? $targetPlan->name : 'selected plan';
-                    $payment->user->notify(new SubscriptionNotification(
-                        'Free Trial Started',
-                        "Your 7-day free trial is now active! Auto-billing for {$targetName} will occur on " . ($trialEnds ? $trialEnds->format('d M, Y') : 'in 7 days') . ".",
-                        'subscription'
-                    ));
-
-                    Log::info("7-day trial started for User {$payment->user_id}, Payment ID {$payment->id}");
-
-                } else {
-                    // ===================================================
-                    // IMMEDIATE ACTIVE SUBSCRIPTION
-                    // ===================================================
-                    $duration = (int) ($session->metadata->duration_days ?? 30);
-                    $this->activateSubscription($payment, $payment->user, $payment->plan, $subId, $duration);
-
-                    if ($payment->plan->plan_type === 'api') {
-                        $this->storeExternalApi($payment->user, $payment->plan, $duration, $subId);
-                    }
-
-                    $admin = User::find(1);
-                    if ($admin) {
-                        $admin->notify(new AdminNotification(
-                            'New Subscription',
-                            "{$payment->user->name} onboarded",
-                            'subscription'
-                        ));
-                    }
-                    $payment->user->notify(new SubscriptionNotification(
-                        'Success',
-                        'Your subscription is active',
-                        'subscription'
-                    ));
-                }
-
+                $this->fulfillCheckoutSession($session, $stripe);
                 DB::commit();
-
+                return response('Webhook handled', 200);
             } catch (\Exception $e) {
                 DB::rollBack();
                 Log::error('Webhook DB Error (checkout.session.completed): ' . $e->getMessage());
@@ -523,7 +593,10 @@ class PlanPaymentController extends Controller
                         ]);
 
                         // User plan is now upgraded to target paid plan!
-                        $payment->user->update(['plan_id' => $targetPlan->id]);
+                        $payment->user->update([
+                            'plan_id'       => $targetPlan->id,
+                            'trial_ends_at' => null,
+                        ]);
 
                         // Unlock target plan credits
                         ProjectionCredit::updateOrCreate(
@@ -633,7 +706,7 @@ class PlanPaymentController extends Controller
 
         $payment = PlanPayment::with('plan')
             ->where('user_id', $user->id)
-            ->where('status', 'paid')
+            ->whereIn('status', ['paid', 'trialing'])
             ->whereNotNull('stripe_subscription_id')
             ->latest()
             ->first();

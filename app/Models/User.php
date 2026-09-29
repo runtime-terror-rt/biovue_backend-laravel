@@ -35,7 +35,8 @@ class User extends Authenticatable
         'plan_id',
         'user_type',
         'profession_type',
-        'is_invited'
+        'is_invited',
+        'trial_ends_at'
     ];
 
     /**
@@ -63,6 +64,7 @@ class User extends Authenticatable
             'status' => 'string',
             'user_type' => 'string',
             'is_invited' => 'boolean',
+            'trial_ends_at' => 'datetime',
         ];
     }
 

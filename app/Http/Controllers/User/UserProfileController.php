@@ -147,6 +147,49 @@ class UserProfileController extends Controller
     {
         $user = User::with('profile', 'medicalHistory')->findOrFail($userId);
 
+        // If user has an unpaid trial session with Stripe, attempt auto-sync
+        if (!$user->trial_ends_at && !$user->plan_id) {
+            $pendingPayment = PlanPayment::where('user_id', $userId)
+                ->where('is_trial', true)
+                ->where('status', 'unpaid')
+                ->where('transaction_id', 'like', 'cs_%')
+                ->latest()
+                ->first();
+
+            if ($pendingPayment) {
+                try {
+                    $planPaymentCtrl = app(\App\Http\Controllers\Payment\PlanPaymentController::class);
+                    if ($planPaymentCtrl->syncSessionById($pendingPayment->transaction_id)) {
+                        $user->refresh();
+                        $user->load(['profile', 'medicalHistory']);
+                    }
+                } catch (\Throwable $e) {
+                    // silently proceed if Stripe is not reachable
+                }
+            }
+        }
+
+        // Fallback: if user table trial_ends_at is null, check PlanPayment or Subscription
+        if (!$user->trial_ends_at) {
+            $latestTrial = PlanPayment::where('user_id', $userId)
+                ->where('is_trial', true)
+                ->whereNotNull('trial_ends_at')
+                ->latest()
+                ->first();
+
+            if ($latestTrial) {
+                $user->trial_ends_at = $latestTrial->trial_ends_at;
+            } else {
+                $sub = \App\Models\Subscription::where('user_id', $userId)
+                    ->whereNotNull('trial_ends_at')
+                    ->latest()
+                    ->first();
+                if ($sub) {
+                    $user->trial_ends_at = $sub->trial_ends_at;
+                }
+            }
+        }
+
         $projectionCredits = ProjectionCredit::where('user_id', $userId)->first();
 
         $user->projection_limit = $projectionCredits ? $projectionCredits->projection_limit : 0;
