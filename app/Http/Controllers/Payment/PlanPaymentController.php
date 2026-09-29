@@ -378,9 +378,16 @@ class PlanPaymentController extends Controller
 
         $paymentId = $session->metadata->payment_id ?? null;
 
-        $payment = $paymentId
-            ? PlanPayment::with(['user', 'plan'])->find($paymentId)
-            : PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
+        $payment = null;
+        if (!empty($session->metadata->payment_id)) {
+            $payment = PlanPayment::with(['user', 'plan'])->find($session->metadata->payment_id);
+        }
+        if (!$payment && !empty($session->id)) {
+            $payment = PlanPayment::with(['user', 'plan'])->where('transaction_id', $session->id)->first();
+        }
+        if (!$payment && !empty($session->id)) {
+            $payment = PlanPayment::with(['user', 'plan'])->where('stripe_session_id', $session->id)->first();
+        }
 
         if (!$payment) {
             Log::warning("fulfillCheckoutSession: Payment not found for session {$session->id}");
@@ -398,11 +405,11 @@ class PlanPaymentController extends Controller
 
         $stripeSub = $stripe->subscriptions->retrieve($subId);
 
-        $trialEnds = $stripeSub->trial_end
+        $trialEnds = !empty($stripeSub->trial_end)
             ? \Carbon\Carbon::createFromTimestamp($stripeSub->trial_end)
             : null;
 
-        $endsAt = $stripeSub->current_period_end
+        $endsAt = (isset($stripeSub->current_period_end) && $stripeSub->current_period_end)
             ? \Carbon\Carbon::createFromTimestamp($stripeSub->current_period_end)
             : null;
 
