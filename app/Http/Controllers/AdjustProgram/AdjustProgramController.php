@@ -31,6 +31,10 @@ class AdjustProgramController extends Controller
             'primary_focus_area'     => 'nullable|string',
             'note'                   => 'nullable|string',
             'programs'               => 'nullable|string',
+            'calories'               => 'nullable|integer',
+            'protein'                => 'nullable|integer',
+            'carbs'                  => 'nullable|integer',
+            'fat'                    => 'nullable|integer',
         ]);
 
         $program = AdjustProgram::updateOrCreate(

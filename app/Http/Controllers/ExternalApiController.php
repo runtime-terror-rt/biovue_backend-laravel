@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\ExternalApi;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 
@@ -148,7 +149,48 @@ class ExternalApiController extends Controller
             'data' => [
                 'plan_name' => $user->plan ? $user->plan->name : 'Free Plan',
                 'api_key' => $apiData ? 'bv_' . substr($apiData->api_key, 3, 6) . '...' . substr($apiData->api_key, -4) : null, 
-                'usage_count' => $apiData ? (int)$apiData->usage_count : 0, 
+                'usage_count' => $apiData ? (int)($apiData->usage_count ?? 0) : 0, 
+            ]
+        ]);
+    }
+
+    public function getDocumentation()
+    {
+        return response()->json([
+            'success' => true,
+            'title'   => 'BioVue External Business API Documentation',
+            'version' => '1.0',
+            'authentication' => [
+                'type' => 'API Key',
+                'header' => 'X-API-KEY: <your_api_key>',
+                'description' => 'Send your API Key in the X-API-KEY header with each API request.'
+            ],
+            'endpoints' => [
+                [
+                    'method' => 'POST',
+                    'endpoint' => '/api/external-api/validate',
+                    'description' => 'Validate your API key, check active status, and see projection/insight limits.'
+                ],
+                [
+                    'method' => 'GET',
+                    'endpoint' => '/api/external-api/developer-profile',
+                    'description' => 'Get developer profile, current plan, masked API key, and limits.'
+                ],
+                [
+                    'method' => 'POST',
+                    'endpoint' => '/api/supplier/walk-in-client',
+                    'description' => 'Register a walk-in client profile with body goals, metrics, and target goals.'
+                ],
+                [
+                    'method' => 'POST',
+                    'endpoint' => '/api/supplier/find-match',
+                    'description' => 'Match catalog supplements for client based on recommended supplements or body goals.'
+                ],
+                [
+                    'method' => 'POST',
+                    'endpoint' => '/api/supplier/notify-client',
+                    'description' => 'Send email notification from supplier to client.'
+                ]
             ]
         ]);
     }

@@ -172,7 +172,9 @@ class UserController extends Controller
                 ],
                 'today_focus' => [
                     'diet' => 'Improve ' . ($profile->overall_diet_quality ?? 'Diet') . ' Quality',
-                    'sleep' => 'Maintain ' . ($profile->sleep_hour ?? 0) . ' hours sleep'
+                    'sleep' => 'Maintain ' . ($profile->sleep_hour ?? 0) . ' hours sleep',
+                    'diet_action' => '/user-dashboard/habits/nutrition',
+                    'sleep_action' => '/user-dashboard/habits/sleep',
                 ]
             ], 200);
 
@@ -709,7 +711,7 @@ class UserController extends Controller
 
     public function userOverviewData(Request $request, $userId = null)
     {
-        $id = $userId ?: auth()->id();
+        $id = $userId ?: ($request->query('user_id') ?: ($request->query('client_id') ?: auth()->id()));
         $days = (int) $request->query('days', 7); 
         $startDate = now()->subDays($days - 1)->toDateString();
         $endDate = now()->toDateString();
@@ -902,7 +904,7 @@ class UserController extends Controller
     public function processChartData(Request $request, $userId = null)
     {
         try {
-            $id = $userId ?: auth()->id();
+            $id = $userId ?: ($request->query('user_id') ?: ($request->query('client_id') ?: auth()->id()));
             $filter = $request->query('filter', 'weekly'); 
 
             if ($filter === 'monthly') {
@@ -938,7 +940,10 @@ class UserController extends Controller
 
             $nutritionLogs = $this->getNutritionLogsCollection($id, $startDate, $endDate);
 
-            $data = $this->calculateChartDetails($days, $activityLogs, $nutritionLogs, $sleepLogs, $hydrationLogs, $stressLogs);
+            $targetGoal = \DB::table('target_goals')->where('user_id', $id)->where('is_active', true)->first();
+            $targetCalories = (float)($targetGoal->target_calories ?? 2000);
+
+            $data = $this->calculateChartDetails($days, $activityLogs, $nutritionLogs, $sleepLogs, $hydrationLogs, $stressLogs, $targetCalories);
 
             return response()->json([
                 'success' => true,
@@ -951,7 +956,7 @@ class UserController extends Controller
         }
     }
 
-    protected function calculateChartDetails($days, $activityLogs, $nutritionLogs, $sleepLogs = null, $hydrationLogs = null, $stressLogs = null)
+    protected function calculateChartDetails($days, $activityLogs, $nutritionLogs, $sleepLogs = null, $hydrationLogs = null, $stressLogs = null, $targetCalories = 2000)
     {
         $sleepLogs = $sleepLogs ?? collect();
         $hydrationLogs = $hydrationLogs ?? collect();
@@ -964,6 +969,7 @@ class UserController extends Controller
         $hydrationData = [];
         $stressData = [];
         $protein = []; $carbs = []; $fats = [];
+        $calories = []; $calorieAdherence = [];
 
         for ($i = $days - 1; $i >= 0; $i--) {
             $date = now()->subDays($i)->toDateString();
@@ -1009,11 +1015,17 @@ class UserController extends Controller
             $p = $dayNutri->sum('protein_value');
             $c = $dayNutri->sum('carbs_value');
             $f = $dayNutri->sum('fat_value');
+            $dayCal = (float)$dayNutri->sum('calories_value');
+
             $total = $p + $c + $f;
 
             $protein[] = $total > 0 ? round(($p / $total) * 100) : 0;
             $carbs[] = $total > 0 ? round(($c / $total) * 100) : 0;
             $fats[] = $total > 0 ? round(($f / $total) * 100) : 0;
+
+            $calories[] = round($dayCal);
+            $adherencePct = $targetCalories > 0 ? round(($dayCal / $targetCalories) * 100) : 0;
+            $calorieAdherence[] = $adherencePct;
         }
 
         return [
@@ -1024,10 +1036,15 @@ class UserController extends Controller
             'stress' => ['labels' => $labels, 'data' => $stressData],
             'nutrition' => [
                 'labels' => $labels,
+                'calories' => $calories,
+                'calorie_percentage' => $calorieAdherence,
+                'adherence_pct' => $calorieAdherence,
+                'target_calories' => $targetCalories,
                 'datasets' => [
                     ['label' => 'Protein', 'data' => $protein, 'color' => '#34A853'],
                     ['label' => 'Carbs', 'data' => $carbs, 'color' => '#4285F4'],
-                    ['label' => 'Fats', 'data' => $fats, 'color' => '#FBBC05']
+                    ['label' => 'Fats', 'data' => $fats, 'color' => '#FBBC05'],
+                    ['label' => 'Calories %', 'data' => $calorieAdherence, 'color' => '#E37400'],
                 ]
             ]
         ];
@@ -1124,7 +1141,7 @@ class UserController extends Controller
     {
         try {
             $loggedInUser = auth()->user();
-            $targetId = $userId ?: $loggedInUser->id;
+            $targetId = $userId ?: ($request->query('user_id') ?: ($request->query('client_id') ?: $loggedInUser->id));
 
             if ($targetId != $loggedInUser->id) {
                 $isConnected = DB::table('connect_user_proffesions')
@@ -1132,7 +1149,7 @@ class UserController extends Controller
                     ->where('user_id', $targetId)
                     ->exists();
 
-                if (!$isConnected) {
+                if (!$isConnected && $loggedInUser->user_type !== 'admin') {
                     return response()->json(['success' => false, 'message' => 'Unauthorized client access'], 403);
                 }
             }
@@ -1169,6 +1186,7 @@ class UserController extends Controller
                 ->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
                 ->get();
 
+            $targetCal = (float)($userData->targetGoals?->target_calories ?? 2000);
             $chartData = [];
             $period = \Carbon\CarbonPeriod::create($startDate, $endDate);
 
@@ -1190,6 +1208,9 @@ class UserController extends Controller
                     $rawHydrationGlasses = round($rawHydrationGlasses / 8, 1);
                 }
 
+                $dayCal = $nutLog ? (float)$nutLog->calories_value : 0;
+                $adherence = $targetCal > 0 && $nutLog ? round(($dayCal / $targetCal) * 100) : 0;
+
                 $chartData[] = [
                     'label' => $date->format('D'), 
                     'weight' => $actLog ? (float)$actLog->weight : null,
@@ -1201,6 +1222,9 @@ class UserController extends Controller
                         'protein' => $nutLog ? (float)$nutLog->protein_value : 0,
                         'carbs'   => $nutLog ? (float)$nutLog->carbs_value : 0,
                         'fats'    => $nutLog ? (float)$nutLog->fat_value : 0,
+                        'calories' => $dayCal,
+                        'calorie_percentage' => $adherence,
+                        'adherence_pct' => $adherence,
                     ]
                 ];
             }
@@ -1435,14 +1459,18 @@ class UserController extends Controller
 
     public function cancelConnectedUser(Request $request)
     {
-        $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
-        ]);
+        $targetUserId = $request->input('user_id') ?? $request->input('client_id') ?? $request->input('id');
+
+        if (!$targetUserId) {
+            return response()->json([
+                'success' => false,
+                'message' => 'The user_id or client_id field is required.'
+            ], 422);
+        }
 
         $authUser = auth()->user();
         $authUserId = $authUser->id;
         $authUserName = $authUser->name;
-        $targetUserId = $request->input('user_id');
 
         $connection = DB::table('connect_user_proffesions')
             ->where(function ($query) use ($authUserId, $targetUserId) {

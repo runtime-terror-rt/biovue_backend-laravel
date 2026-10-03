@@ -53,12 +53,13 @@ class PlansSeeder extends Seeder
                 'projection_limit' => 2,
                 'status' => true,
                 'features' => [
+                    'Everything in Free Trial',
                     'Up to 2 AI body projections',
-                    'AI-generated health suggestions (Limited)',
-                    'Recommended Business',
-                    'Achievement badges',
-                    'Progress tracking',
-                    'X% Improved vs baseline',
+                    '6-Month & 1-Year future horizon',
+                    'AI-generated health suggestions',
+                    'Recommended Coaches & Clinics',
+                    'Achievement badges & Progress tracking',
+                    'Historical trends vs AI projections',
                     'Recalculated after every photo',
                     'Standard Support Services'
                 ],
@@ -76,13 +77,13 @@ class PlansSeeder extends Seeder
                 'status' => true,
                 'features' => [
                     'EVERYTHING IN PLUS',
-                    'Up to 4 AI projections',
-                    'External fitness tracker sync',
-                    'Downloadable progress reports',
-                    'Historical trends vs AI projections',
-                    'Priority Email support',
+                    'Up to 4 AI body projections',
+                    '5-Year future health horizon & insights',
+                    '1K & 2K Ultra HD AI resolution',
+                    'External fitness tracker sync (Apple Health, Google Fit)',
+                    'Downloadable comprehensive progress reports',
                     'Full access AI-generated health suggestions',
-                    'Future Health Insights (5 year projection)'
+                    'Priority Email & Dedicated Support'
                 ],
             ],
 

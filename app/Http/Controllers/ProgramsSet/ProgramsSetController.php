@@ -46,6 +46,7 @@ class ProgramsSetController extends Controller
             'program_focus' => 'nullable|array',
             'focus_areas' => 'nullable|array',
             'habit_focus' => 'nullable|array',
+            'workout_types' => 'nullable|array',
             'calories' => 'nullable|integer',
             'protein' => 'nullable|integer',
             'carbs' => 'nullable|integer',
@@ -68,6 +69,7 @@ class ProgramsSetController extends Controller
                 'program_focus' => $request->program_focus,
                 'focus_areas' => $request->focus_areas,
                 'habit_focus' => $request->habit_focus,
+                'workout_types' => $request->workout_types,
                 'calories' => $request->calories,
                 'protein' => $request->protein,
                 'carbs' => $request->carbs,
@@ -129,6 +131,7 @@ class ProgramsSetController extends Controller
             'program_focus' => 'nullable|array',
             'focus_areas' => 'nullable|array',
             'habit_focus' => 'nullable|array',
+            'workout_types' => 'nullable|array',
             'calories' => 'nullable|integer',
             'protein' => 'nullable|integer',
             'carbs' => 'nullable|integer',
@@ -148,6 +151,7 @@ class ProgramsSetController extends Controller
             $program->update($request->only([
                 'name','duration','primary_goal','target_intensity',
                 'habit_focus_areas','program_focus','focus_areas','habit_focus',
+                'workout_types',
                 'calories','protein','carbs','fat',
                 'supplement_recommendation','supplement',
                 'description','notes','weekly_targets'

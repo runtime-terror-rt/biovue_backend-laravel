@@ -103,7 +103,8 @@ class TrainerController extends Controller
             $projectionsCount = \DB::table('projection_data')->where('user_id', $userId)->count()
                 ?: \App\Models\Projection::where('user_id', $userId)->whereMonth('created_at', now()->month)->count();
 
-            $creditRecord = \App\Models\ProjectionCredit::where('user_id', $userId)->first();
+            $creditRecord = \App\Models\ProjectionCredit::where('user_id', $userId)->first()
+                ?: \App\Models\ProjectionCredit::where('user_id', auth()->id())->first();
             $projectionLimit = $creditRecord?->projection_limit ?? 10;
             $daysUntilReset = max(1, now()->endOfMonth()->diffInDays(now()));
 

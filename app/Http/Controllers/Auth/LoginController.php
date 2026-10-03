@@ -57,6 +57,12 @@ class LoginController extends Controller
             $token = $user->createToken('auth_token_' . $user->id)->plainTextToken;
             $planDuration = $this->getPlanDuration($user);
             $projectionCredits = $user->projectionCredits ? $user->projectionCredits->projection_limit : 0;
+
+            $hasTrainerConnection = DB::table('connect_user_proffesions')->where('user_id', $user->id)->exists()
+                || DB::table('connect_to_professions')->where('user_id', $user->id)->exists();
+            $isInvitedOrConnected = (bool)$user->is_invited || $hasTrainerConnection;
+            $effectivePlanName = $user->plan ? $user->plan->name : ($isInvitedOrConnected ? 'Client Access' : null);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Login successful.',
@@ -66,13 +72,15 @@ class LoginController extends Controller
                         'email' => $user->email,
                         'role' => $user->getRoleNames()->first() ?? null,
                         'plan_id' => $user->plan_id,
-                        'plan_name' => $user->plan->name?? null,
+                        'plan_name' => $effectivePlanName,
                         'plan_duration' => $planDuration, 
                         'user_type' => $user->user_type ?? null,   
                         'profession_type' => $user->profession_type ?? null,
                         'projection_credits' => $projectionCredits,
                         'is_profile_completed' => $profileStatus,
-                        'is_invited' => $user->is_invited,
+                        'is_invited' => $isInvitedOrConnected,
+                        'has_active_access' => (bool)($user->plan_id || $isInvitedOrConnected),
+                        'has_trainer_access' => $hasTrainerConnection,
                         'invitation_status' => $invitationStatus,
                         'created_at' => $user->created_at->toDateTimeString(),
                         'updated_at' => $user->updated_at->toDateTimeString(),

@@ -177,14 +177,18 @@ Route::prefix('v1')->group(function () {
         Route::get('user-reports', [UserController::class, 'getUserReport']);
         Route::get('log-reports', [UserController::class, 'getLogReport']);
         Route::get('user-overview', [UserController::class, 'userOverviewData']);
+        Route::get('user-overview/{userId?}', [UserController::class, 'userOverviewData']);
         Route::get('user-overview-chart', [UserController::class, 'userOverviewChart']);
         Route::get('/user-overview-chart/{userId?}', [UserController::class, 'userOverviewChart']);
         Route::get('user-overview-filter', [UserController::class, 'processChartData']);
+        Route::get('user-overview-filter/{userId?}', [UserController::class, 'processChartData']);
         Route::get('trainer-overview', [UserController::class, 'trainerOverview']);
         Route::post('connect-profession', [UserController::class, 'connectToProfession']);
         Route::get('connected-professions', [UserController::class, 'getMyConnections']);
         Route::get('connected-user-lists', [UserController::class, 'getConnectedUsersList']);
         Route::post('cancel-connected-user',[UserController::class, 'cancelConnectedUser']);
+        Route::delete('cancel-connected-user',[UserController::class, 'cancelConnectedUser']);
+        Route::delete('clients/{id?}', [UserController::class, 'cancelConnectedUser']);
         Route::get('professionals-data/{id}', [TrainerController::class, 'indexProfessionals']);
         Route::get('professional-client-card', [TrainerController::class, 'professionalClientCard']);
        //AIObser
@@ -350,9 +354,14 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/admin/external-apis', [ExternalApiController::class, 'index']);
         Route::get('/external-api', [ExternalApiController::class, 'show']);
+        Route::get('/external-api/reveal', [ExternalApiController::class, 'revealApiKey']);
+        Route::get('/external-api/developer-profile', [ExternalApiController::class, 'getDeveloperProfile']);
+        Route::post('/external-api/sandbox-proxy', [ExternalApiController::class, 'sandboxProxy']);
+        Route::get('/external-api/documentation', [ExternalApiController::class, 'getDocumentation']);
     });
 
     Route::post('/external-api/validate', [ExternalApiController::class, 'validateApiKey']);
+    Route::get('/external-api/docs', [ExternalApiController::class, 'getDocumentation']);
     Route::get('/products/supplier/ai', [ProductController::class, 'supplierProductForAI']);
     Route::get('/supplier-profile/{id}', [ProductController::class, 'supplierProfileWithProducts']);
 

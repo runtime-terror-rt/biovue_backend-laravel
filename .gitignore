@@ -25,3 +25,4 @@ temp_interactive_push.bat
 .env
 .env.docker
 branch_structure.json
+vite.config.js
