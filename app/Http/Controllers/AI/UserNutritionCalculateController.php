@@ -24,20 +24,23 @@ class UserNutritionCalculateController extends Controller
         try {
             $userId   = $request->user_id;
             $newFoods = $request->foods;
-            $logDate  = $request->log_date ?? now()->toDateString();
+            $logDate  = $request->filled('log_date') 
+                ? \Carbon\Carbon::parse($request->log_date)->toDateString() 
+                : now()->toDateString();
 
-            // Call AI Nutrition API (only for the newly submitted foods)
+            // Call AI Nutrition API (trailing slash required by FastAPI/Uvicorn to avoid 307 redirect)
             $response = Http::withoutVerifying()
                 ->timeout(120)
-                ->post('https://ai.biovuedigitalwellness.com/api/v1/habits/nutritions/calculate', [
+                ->withOptions(['allow_redirects' => true])
+                ->post('https://ai.biovuedigitalwellness.com/api/v1/habits/nutritions/calculate/', [
                     'foods' => $newFoods,
                     'user_id' => (string) $userId,
                 ]);
 
-            if ($response->failed()) {
+            if ($response->failed() || empty($response->json())) {
                 return response()->json([
                     'message' => 'Nutrition API failed',
-                    'error' => $response->json()
+                    'error' => $response->json() ?? $response->body()
                 ], 500);
             }
 
@@ -93,7 +96,9 @@ class UserNutritionCalculateController extends Controller
     {
         $user = $request->user(); // Logged-in user
 
-        $logDate = $request->log_date ?? now()->toDateString();
+        $logDate = $request->filled('log_date') 
+            ? \Carbon\Carbon::parse($request->log_date)->toDateString() 
+            : now()->toDateString();
 
         $aggregated = $this->aggregateForDate($user->id, $logDate);
 
@@ -118,7 +123,9 @@ class UserNutritionCalculateController extends Controller
         ]);
 
         $userId = $request->user_id ?? auth()->id();
-        $logDate = $request->log_date ?? now()->toDateString();
+        $logDate = $request->filled('log_date') 
+            ? \Carbon\Carbon::parse($request->log_date)->toDateString() 
+            : now()->toDateString();
         $foodToRemove = trim($request->food);
 
         $records = UserNutritionCalculate::where('user_id', $userId)
@@ -142,10 +149,17 @@ class UserNutritionCalculateController extends Controller
             $newFoods = [];
             $foundInRecord = false;
             foreach ($foods as $f) {
-                $trimmedF = trim((string)$f);
-                $isMatch = (strcasecmp($trimmedF, $foodToRemove) === 0) 
-                    || (stripos($trimmedF, $foodToRemove) !== false)
-                    || (stripos($foodToRemove, $trimmedF) !== false);
+                if (is_array($f)) {
+                    $foodName = trim((string)($f['food'] ?? $f['name'] ?? ''));
+                } else {
+                    $foodName = trim((string)$f);
+                }
+
+                $isMatch = (!empty($foodName) && !empty($foodToRemove)) && (
+                    strcasecmp($foodName, $foodToRemove) === 0 
+                    || stripos($foodName, $foodToRemove) !== false 
+                    || stripos($foodToRemove, $foodName) !== false
+                );
 
                 if (!$foundInRecord && $isMatch) {
                     $foundInRecord = true;
@@ -205,8 +219,10 @@ class UserNutritionCalculateController extends Controller
      */
     private function aggregateForDate($userId, $logDate)
     {
+        $normalizedDate = \Carbon\Carbon::parse($logDate)->toDateString();
+
         $nutritions = UserNutritionCalculate::where('user_id', $userId)
-            ->whereDate('log_date', $logDate)
+            ->whereDate('log_date', $normalizedDate)
             ->get();
 
         if ($nutritions->isEmpty()) {
