@@ -36,6 +36,9 @@ class ClientMessageNotification extends Notification
             'title' => $this->title,
             'message' => $this->message,
             'type' => $this->type,
+            'url' => '/admin/messages',
+            'action_url' => '/admin/messages',
+            'link' => '/admin/messages',
         ];
     }
 }

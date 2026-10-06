@@ -36,22 +36,38 @@ class CoachMessageNotification extends Notification implements ShouldQueue, Shou
 
     public function toDatabase($notifiable)
     {
+        $url = $this->resolveTargetUrl($notifiable);
         return [
             'title'   => $this->title,
             'message' => $this->message,
             'type'    => $this->type,
             'additional_data' => $this->additionalData,
+            'url'     => $url,
+            'action_url' => $url,
+            'link'    => $url,
         ];
     }
 
     public function toBroadcast($notifiable)
     {
+        $url = $this->resolveTargetUrl($notifiable);
         return new BroadcastMessage([
             'title'   => $this->title,
             'message' => $this->message,
             'type'    => $this->type,
             'additional_data' => $this->additionalData,
+            'url'     => $url,
+            'action_url' => $url,
+            'link'    => $url,
         ]);
+    }
+
+    private function resolveTargetUrl($notifiable): string
+    {
+        if ($this->type === 'connection_cancelled' || $this->type === 'connection_request') {
+            return ($notifiable->user_type === 'professional') ? '/clients' : '/connected-professions';
+        }
+        return ($notifiable->user_type === 'professional') ? '/admin/messages' : '/messages';
     }
 
     public function toFcm($notifiable)

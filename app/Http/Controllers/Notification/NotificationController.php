@@ -53,15 +53,32 @@ class NotificationController extends Controller
     public function notificationListByUser()
     {
         try {
-            $notifications = auth()->user()->notifications->map(function ($notification) {
+            $user = auth()->user();
+            $notifications = $user->notifications->map(function ($notification) use ($user) {
+                $data = $notification->data ?? [];
+                $type = $data['type'] ?? $notification->type ?? null;
+                $url = $this->resolveNotificationUrl($notification, $user);
+
+                $title = $data['title'] 
+                    ?? (!empty($data['program_name']) ? 'Program Assigned: ' . $data['program_name'] : null)
+                    ?? (!empty($data['schedule_id']) ? 'Check-in Scheduled' : 'Notification');
+
+                $message = $data['message'] 
+                    ?? ($data['reminder_content'] ?? null);
+
                 return [
                     'id' => $notification->id,
-                    'title' => $notification->data['title'] ?? null,
-                    'type' => $notification->data['type'] ?? null,
-                    'message' => $notification->data['message'] ?? null,
+                    'title' => $title,
+                    'type' => $type,
+                    'message' => $message,
+                    'url' => $url,
+                    'action_url' => $url,
+                    'link' => $url,
+                    'data' => $data,
                     'created_at' => $notification->created_at->format('Y-m-d H:i:s'),
                     'created_at_formatted' => $notification->created_at->diffForHumans(),
                     'read_at' => $notification->read_at,
+                    'is_read' => $notification->read_at !== null,
                 ];
             });
 
@@ -79,7 +96,68 @@ class NotificationController extends Controller
                 'error' => 'Something went wrong, please try again.'
             ]);
         }
+    }
 
+    /**
+     * Resolve the target website URL for a notification
+     */
+    public function resolveNotificationUrl($notification, $user = null): string
+    {
+        $data = $notification->data ?? [];
+
+        // 1. If explicit URL is already present in notification payload
+        if (!empty($data['url']) && $data['url'] !== '#') {
+            return $data['url'];
+        }
+        if (!empty($data['action_url']) && $data['action_url'] !== '#') {
+            return $data['action_url'];
+        }
+        if (!empty($data['link']) && $data['link'] !== '#') {
+            return $data['link'];
+        }
+
+        $type = $data['type'] ?? null;
+        $userType = $user ? $user->user_type : (auth()->user()?->user_type ?? 'individual');
+
+        // 2. Resolve by known notification type
+        return match ($type) {
+            'coach_message' => ($userType === 'professional') ? '/admin/messages' : '/messages',
+            'client_message' => '/admin/messages',
+            'program_assigned' => !empty($data['program_id']) ? '/user-programs?program_id=' . $data['program_id'] : '/user-programs',
+            'goal_updates', 'goal_message' => '/goals',
+            'milestone_message' => '/goals',
+            'insight_msg' => '/insights',
+            'schedule_created', 'schedule_updated', 'schedule_reminder', 'reminder_message' => '/calendar',
+            'connection_cancelled', 'connection_request' => ($userType === 'professional') ? '/clients' : '/connected-professions',
+            'subscription_message', 'subscription_updates' => '/pricing',
+            'registration_message' => '/admin/users',
+            default => $this->fallbackUrlByTypeOrClass($notification, $data, $userType),
+        };
+    }
+
+    private function fallbackUrlByTypeOrClass($notification, array $data, string $userType): string
+    {
+        if (!empty($data['program_id'])) {
+            return '/user-programs?program_id=' . $data['program_id'];
+        }
+
+        if (!empty($data['schedule_id'])) {
+            return '/calendar';
+        }
+
+        $className = class_basename($notification->type ?? '');
+        return match ($className) {
+            'ProgramAssignedNotification' => '/user-programs',
+            'ScheduleNotification' => '/calendar',
+            'CoachMessageNotification' => ($userType === 'professional') ? '/admin/messages' : '/messages',
+            'ClientMessageNotification' => '/admin/messages',
+            'GoalUpdateNotification', 'MilestoneNotification' => '/goals',
+            'InsightNotification' => '/insights',
+            'ReminderNotification' => '/calendar',
+            'SubscriptionNotification' => '/pricing',
+            'AdminNotification' => '/admin/overview',
+            default => ($userType === 'professional') ? '/trainer-overview' : '/user-dashboard',
+        };
     }
 
     public function markAsRead(Request $request)

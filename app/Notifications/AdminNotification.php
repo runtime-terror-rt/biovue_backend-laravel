@@ -32,10 +32,14 @@ class AdminNotification extends Notification
 
     public function toDatabase($notifiable)
     {
+        $url = $this->type === 'registration_message' ? '/admin/users' : '/admin/overview';
         return [
             'title' => $this->title,
             'message' => $this->message,
             'type' => $this->type,
+            'url' => $url,
+            'action_url' => $url,
+            'link' => $url,
         ];
     }
 }

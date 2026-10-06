@@ -25,9 +25,14 @@ class ProgramAssignedNotification extends Notification
     public function toDatabase($notifiable)
     {
         return [
-            'message' => 'A new program has been assigned to you.',
+            'title' => 'New Program Assigned',
+            'type' => 'program_assigned',
+            'message' => "A new program '{$this->program->name}' has been assigned to you.",
             'program_id' => $this->program->id,
             'program_name' => $this->program->name,
+            'url' => '/user-programs?program_id=' . $this->program->id,
+            'action_url' => '/user-programs?program_id=' . $this->program->id,
+            'link' => '/user-programs?program_id=' . $this->program->id,
         ];
     }
 }

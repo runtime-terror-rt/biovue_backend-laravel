@@ -36,6 +36,9 @@ class SubscriptionNotification extends Notification
             'title' => $this->title,
             'message' => $this->message,
             'type' => $this->type,
+            'url' => '/pricing',
+            'action_url' => '/pricing',
+            'link' => '/pricing',
         ];
     }
 }

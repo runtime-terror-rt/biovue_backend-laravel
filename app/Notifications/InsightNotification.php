@@ -36,6 +36,9 @@ class InsightNotification extends Notification
             'title' => $this->title,
             'message' => $this->message,
             'type' => $this->type,
+            'url' => '/insights',
+            'action_url' => '/insights',
+            'link' => '/insights',
         ];
     }
 

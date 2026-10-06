@@ -44,6 +44,9 @@ class ReminderNotification extends Notification
             'title' => $this->title,
             'message' => $this->reminder_content,
             'type' => $this->type,
+            'url' => '/calendar',
+            'action_url' => '/calendar',
+            'link' => '/calendar',
         ];
     }
 }

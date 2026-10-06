@@ -40,10 +40,16 @@ class ScheduleNotification extends Notification implements ShouldQueue
 
     public function toArray($notifiable)
     {
+        $title = $this->status_type == 'created' ? 'New Check-in Scheduled' : 'Schedule Updated';
         return [
+            'title' => $title,
+            'type' => 'schedule_' . $this->status_type,
             'schedule_id' => $this->schedule->id,
             'message' => 'Schedule ' . $this->status_type,
             'date' => $this->schedule->schedule_date,
+            'url' => '/calendar',
+            'action_url' => '/calendar',
+            'link' => '/calendar',
         ];
     }
 }
