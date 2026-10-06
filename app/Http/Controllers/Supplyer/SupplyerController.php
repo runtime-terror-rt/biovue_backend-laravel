@@ -310,6 +310,7 @@ class SupplyerController extends Controller
                     'user_type'      => 'individual',
                     'terms_accepted' => true,
                     'status'         => 'active',
+                    'email_verified_at' => now(),
                 ]
             );
 
