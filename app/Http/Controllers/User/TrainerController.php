@@ -101,7 +101,7 @@ class TrainerController extends Controller
             $trendStatus = ($user->status == 'on_track') ? "Improving" : "Struggling";
 
             $projectionsCount = \DB::table('projection_data')->where('user_id', $userId)->count()
-                ?: \App\Models\Projection::where('user_id', $userId)->whereMonth('created_at', now()->month)->count();
+                ?: \App\Models\Projection::where('user_id', $userId)->count();
 
             $creditRecord = \App\Models\ProjectionCredit::where('user_id', $userId)->first()
                 ?: \App\Models\ProjectionCredit::where('user_id', auth()->id())->first();

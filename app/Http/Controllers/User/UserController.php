@@ -727,6 +727,7 @@ class UserController extends Controller
 
         $activityLogs = DB::table('activity_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
         $sleepLogs = DB::table('sleep_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
+        $hydrationLogs = DB::table('hydration_logs')->where('user_id', $id)->whereBetween('log_date', [$startDate, $endDate])->get();
         
         // Fetching using Model to leverage $casts
         $nutritionLogs = \App\Models\AI\UserNutritionCalculate::where('user_id', $id)
@@ -734,7 +735,7 @@ class UserController extends Controller
                             ->get();
         
         $target = $user->targetGoals;
-        $latestWeight = $activityLogs->last()->weight ?? ($user->profile->weight ?? 0);
+        $latestWeight = $activityLogs->whereNotNull('weight')->last()->weight ?? ($user->profile->weight ?? 0);
         $targetWeight = $target->target_weight ?? 0;
         
         // BMI Calculation
@@ -746,11 +747,26 @@ class UserController extends Controller
             $bmiScore = round($weightInKg / ($heightInMeters * $heightInMeters), 1);
         }
 
-        $actualLogsCount = $activityLogs->count() + $nutritionLogs->count() + $sleepLogs->count();
-        $totalPossibleLogs = $days * 3; 
+        $actualLogsCount = $activityLogs->count() + $nutritionLogs->count() + $sleepLogs->count() + $hydrationLogs->count();
+        $totalPossibleLogs = $days * 4; 
         $wellnessScore = $totalPossibleLogs > 0 ? min(round(($actualLogsCount / $totalPossibleLogs) * 100), 100) : 0;
 
         $nutritionQuality = $nutritionLogs->count() > 0 ? min(round(($nutritionLogs->count() / $days) * 100), 100) : 0;
+
+        // Sleep calculation with fallback
+        $avgSleep = $sleepLogs->isNotEmpty() ? round($sleepLogs->avg('sleep_hours'), 1) : round($activityLogs->whereNotNull('sleep_hours')->avg('sleep_hours') ?? 0, 1);
+
+        // Hydration calculation with normalization (800 oz fix)
+        $avgGlasses = round($hydrationLogs->avg('water_glasses') ?? ($activityLogs->whereNotNull('water_glasses')->avg('water_glasses') ?? 0), 1);
+        $avgOz = round($hydrationLogs->avg('water_oz') ?? ($avgGlasses * 8), 1);
+        if ($avgGlasses > 30) {
+            $avgOz = $avgGlasses;
+            $avgGlasses = round($avgOz / 8, 1);
+        }
+        if ($avgOz >= 700 && $avgGlasses >= 80) {
+            $avgOz = round($avgOz / 8, 1);
+            $avgGlasses = round($avgOz / 8, 1);
+        }
 
         return response()->json([
             'success' => true,
@@ -802,8 +818,13 @@ class UserController extends Controller
                         'coach_plan' => number_format($target->daily_step_goal ?? 0) . " steps"
                     ],
                     'sleep' => [
-                        'avg' => round($sleepLogs->avg('sleep_hours') ?? 0, 1) . " Hrs",
+                        'avg' => $avgSleep . " Hrs",
                         'coach_plan' => ($target->sleep_target ?? '7-8') . " Hrs"
+                    ],
+                    'hydration' => [
+                        'avg' => $avgOz . " oz",
+                        'avg_glasses' => $avgGlasses . " glasses",
+                        'coach_target' => ($target->water_target ? ($target->water_target * 8) : 64) . " oz"
                     ]
                 ]
             ]
@@ -1173,7 +1194,10 @@ class UserController extends Controller
 
             $nutrition = DB::table('user_nutrition_calculates')
                 ->where('user_id', $targetId)
-                ->whereBetween('log_date', [$startDate->toDateTimeString(), $endDate->toDateTimeString()])
+                ->where(function($q) use ($startDate, $endDate) {
+                    $q->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
+                      ->orWhereBetween('created_at', [$startDate->toDateTimeString(), $endDate->toDateTimeString()]);
+                })
                 ->get();
 
             $hydration = DB::table('hydration_logs')
@@ -1229,7 +1253,7 @@ class UserController extends Controller
                 ];
             }
 
-            $latestWeight = $activity->last()->weight ?? ($userData->profile->weight ?? 0);
+            $latestWeight = $activity->whereNotNull('weight')->last()->weight ?? ($userData->profile->weight ?? 0);
             $targetGoal = $userData->targetGoals;
 
             $avgDailyGlasses = round($hydration->avg('water_glasses') ?? 0, 1);
@@ -1238,7 +1262,15 @@ class UserController extends Controller
                 $avgDailyOz = $avgDailyGlasses;
                 $avgDailyGlasses = round($avgDailyOz / 8, 1);
             }
-            $projectionsCount = DB::table('projection_data')->where('user_id', $targetId)->count();
+            if ($avgDailyOz >= 700 && $avgDailyGlasses >= 80) {
+                $avgDailyOz = round($avgDailyOz / 8, 1);
+                $avgDailyGlasses = round($avgDailyOz / 8, 1);
+            }
+
+            $avgSleep = $sleep->isNotEmpty() ? round($sleep->avg('sleep_hours'), 1) : round($activity->whereNotNull('sleep_hours')->avg('sleep_hours') ?? 0, 1);
+
+            $projectionsCount = DB::table('projection_data')->where('user_id', $targetId)->count()
+                ?: DB::table('projections')->where('user_id', $targetId)->count();
 
             return response()->json([
                 'success' => true,
@@ -1255,7 +1287,7 @@ class UserController extends Controller
                         'target' => $targetGoal->daily_step_goal ?? 6500
                     ],
                     'sleep' => [
-                        'avg'    => round($sleep->avg('sleep_hours') ?? 0, 1),
+                        'avg'    => $avgSleep,
                         'target' => $targetGoal->sleep_target ?? 8
                     ],
                     'hydration' => [
@@ -1303,6 +1335,7 @@ class UserController extends Controller
 
             $clientsTable = $coach->myClients()
                 ->with([
+                    'profile',
                     'targetGoals',
                     'activityLogs' => fn($q) => $q->latest('log_date'),
                     'projectionCredits'
@@ -1317,13 +1350,15 @@ class UserController extends Controller
                     $diff = $lastLogDate ? now()->startOfDay()->diffInDays($lastLogDate->startOfDay()) : null;
 
                     $goalData = $user->targetGoals; 
-                    $used = $user->projection_datas_count ?? 0;
+                    $used = ($user->projection_datas_count ?? 0)
+                        ?: DB::table('projections')->where('user_id', $user->id)->count();
                     $limit = $user->projectionCredits->projection_limit ?? 0;
+                    $clientUnit = ($user->profile?->unit === 'metric') ? 'kg' : 'lbs';
                     
                     return [
                         'user_id'         => $user->id,
                         'user_name'       => $user->name,
-                        'goal'            => $goalData ? ($goalData->target_weight . " lbs Target") : 'General wellness',
+                        'goal'            => $goalData ? ($goalData->target_weight . " {$clientUnit} Target") : 'General wellness',
                         'projection_used' => "{$used}/{$limit}", 
                         'status'          => ($diff === null || $diff >= 3) ? 'Need attention' : 'On track',
                         'activity'        => $this->resolveActivityText($diff, $lastLogDate),
