@@ -302,17 +302,29 @@ class SupplyerController extends Controller
         try {
             \DB::beginTransaction();
 
-            $user = User::firstOrCreate(
-                ['email' => $validated['email']],
-                [
-                    'name'           => $validated['name'],
-                    'password'       => \Illuminate\Support\Facades\Hash::make(\Illuminate\Support\Str::random(12)),
-                    'user_type'      => 'individual',
-                    'terms_accepted' => true,
-                    'status'         => 'active',
+            $plainPassword = null;
+            $user = User::where('email', $validated['email'])->first();
+
+            if (!$user) {
+                $plainPassword = \Illuminate\Support\Str::random(10);
+                $user = User::create([
+                    'name'              => $validated['name'],
+                    'email'             => $validated['email'],
+                    'password'          => \Illuminate\Support\Facades\Hash::make($plainPassword),
+                    'user_type'         => 'individual',
+                    'terms_accepted'    => true,
+                    'status'            => 'active',
                     'email_verified_at' => now(),
-                ]
-            );
+                ]);
+
+                if (method_exists($user, 'assignRole')) {
+                    $user->assignRole('individual');
+                }
+            } else {
+                if (!empty($validated['name'])) {
+                    $user->update(['name' => $validated['name']]);
+                }
+            }
 
             \App\Models\UserProfile::updateOrCreate(
                 ['user_id' => $user->id],
@@ -357,10 +369,37 @@ class SupplyerController extends Controller
 
             \DB::commit();
 
+            // Send login credentials to the walk-in client via email
+            if ($plainPassword) {
+                $supplier = auth()->user();
+                $supplierName = $supplier ? $supplier->name : 'BioVue Supplier';
+                $recommendations = $validated['supplement_recommendation'] ?? [];
+
+                try {
+                    \Illuminate\Support\Facades\Mail::to($user->email)
+                        ->send(new \App\Mail\WalkInClientWelcomeMail(
+                            $user->name,
+                            $user->email,
+                            $plainPassword,
+                            $supplierName,
+                            $recommendations
+                        ));
+                } catch (\Exception $mailEx) {
+                    \Log::warning('Walk-in client email sending failed: ' . $mailEx->getMessage());
+                }
+            }
+
+            $responseData = $user->load(['profile', 'targetGoals'])->toArray();
+            if ($plainPassword) {
+                $responseData['temporary_password'] = $plainPassword;
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Walk-in client profile created successfully.',
-                'data'    => $user->load(['profile', 'targetGoals']),
+                'message' => $plainPassword
+                    ? 'Walk-in client profile created and login credentials sent to client email.'
+                    : 'Walk-in client profile connected successfully.',
+                'data'    => $responseData,
             ], 201);
 
         } catch (\Exception $e) {
