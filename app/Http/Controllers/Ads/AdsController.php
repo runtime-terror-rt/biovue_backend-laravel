@@ -79,7 +79,7 @@ class AdsController extends Controller
                 Storage::disk('public')->delete($ad->getRawOriginal('image'));
             }
 
-            $path = $request->file('image')->store('ads', 'public');
+            $path = \App\Services\ImageOptimizerService::storeOptimized($request->file('image'), 'ads');
             $validated['image'] = $path;
         } else {
 

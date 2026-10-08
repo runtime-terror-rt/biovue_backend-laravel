@@ -17,21 +17,24 @@ class ProjectionController extends Controller
         $user = auth()->user();
 
         $daysSinceJoined = now()->diffInDays($user->created_at);
-        $hasPlan = $user->adjustProgram()->exists();
-
-        if ($daysSinceJoined > 7 && !$hasPlan) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Your access period has expired. Please subscribe to a plan to view your projections.',
-                'locked' => true
-            ], 403);
-        }
+        $hasPaidPlan = ($user->plan && !str_contains(strtolower($user->plan->name), 'free'))
+            || $user->planPayments()->whereIn('status', ['paid', 'active'])->where('is_trial', false)->exists();
+        
+        $isTrialActive = ($user->trial_ends_at && $user->trial_ends_at->isFuture()) || $daysSinceJoined <= 7;
 
         $projections = ProjectionData::where('user_id', $user->id)
             ->latest()
             ->get();
 
         if ($projections->isEmpty()) {
+            if (!$hasPaidPlan && !$isTrialActive) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Your trial access period has expired. Please subscribe to a plan to view your projections.',
+                    'locked'  => true
+                ], 403);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'No projections found.',
@@ -131,7 +134,8 @@ class ProjectionController extends Controller
         }
 
         // Timeframe limits: Free trial only gets 1_year
-        if ($isFree && in_array($timeframe, ['6_month', '6month', '6 month', '5_year', '5year', '5 year', '5'])) {
+        $restrictedFreeVariants = ['6_month', '6month', '6 month', '6-month', '5_year', '5year', '5 year', '5', '5-year', '5_years', '5 years'];
+        if ($isFree && in_array($timeframe, $restrictedFreeVariants)) {
             return response()->json([
                 'success' => false,
                 'message' => 'The Free Trial is only available for 1-Year projections. 6-Month and 5-Year options require a Plus or Premium subscription.'
@@ -139,7 +143,8 @@ class ProjectionController extends Controller
         }
 
         // Plus users cannot access 5_year projections
-        if ($isPlus && in_array($timeframe, ['5_year', '5year', '5 year', '5'])) {
+        $fiveYearVariants = ['5_year', '5year', '5 year', '5', '5-year', '5_years', '5 years', '5-years'];
+        if ($isPlus && in_array($timeframe, $fiveYearVariants)) {
             return response()->json([
                 'success' => false,
                 'message' => '5-Year projections and health insights are exclusively available on the Premium plan. Please upgrade to Premium.'
@@ -147,21 +152,36 @@ class ProjectionController extends Controller
         }
 
         // 2. Credit limit check
-        $credits = ProjectionCredit::where('user_id', $user->id)->first();
-        if (!$credits || $credits->projection_limit <= 0) {
-            return response()->json(['success' => false, 'message' => 'Insufficient credits'], 403);
+        $credits = ProjectionCredit::firstOrCreate(
+            ['user_id' => $user->id],
+            [
+                'projection_limit' => $user->plan?->projection_limit ?? 1,
+                'member_limit'     => 0,
+                'expiry_date'      => $user->trial_ends_at ?: now()->addDays(7)
+            ]
+        );
+        if ($credits->projection_limit <= 0) {
+            return response()->json([
+                'success' => false, 
+                'message' => 'No projection credits remaining. Please upgrade your plan to generate new projections.',
+                'remaining_credit' => 0
+            ], 403);
         }
 
         try {
-            // 3. Store the input image locally (optional but good for history)
-            $imagePath = $request->file('image')->store('projections/inputs', 'public');
+            // 3. Store the input image locally (optimized, preserving aspect ratio and high fidelity)
+            $imagePath = \App\Services\ImageOptimizerService::storeOptimized($request->file('image'), 'projections/inputs');
+            $optimizedFullPath = storage_path('app/public/' . $imagePath);
+            $imageContent = file_exists($optimizedFullPath) 
+                ? file_get_contents($optimizedFullPath) 
+                : file_get_contents($request->file('image')->getRealPath());
 
             // 4. Hit the AI API (Matching the FastAPI structure you provided)
             $response = \Illuminate\Support\Facades\Http::timeout(300)
                 ->asMultipart()
                 ->attach(
                     'image', 
-                    file_get_contents($request->file('image')->getRealPath()), 
+                    $imageContent, 
                     $request->file('image')->getClientOriginalName()
                 )
                 // FastAPI Form parameters
@@ -188,12 +208,96 @@ class ProjectionController extends Controller
                     'summary_data'     => $aiData['summary'] ?? null, 
                 ]);
 
+                // Sync to separate projection tables for backward compatibility
+                $aiDomain = "https://ai.biovuedigitalwellness.com";
+                $pData = $projection->projections_data;
+
+                if (isset($pData['current_lifestyle'])) {
+                    \App\Models\AI\ProjectionLifestyle::create([
+                        'user_id'          => $user->id,
+                        'image'            => $imagePath,
+                        'projection_id'    => $projection->id,
+                        'projection_url'   => $pData['current_lifestyle']['projection_url'] ?? null,
+                        'timeframe'        => $projection->timeframe,
+                        'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? null,
+                        'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? null,
+                        'expected_changes' => isset($pData['current_lifestyle']['expected_changes']) ? json_encode($pData['current_lifestyle']['expected_changes']) : null,
+                    ]);
+                }
+
+                if (isset($pData['future_goal'])) {
+                    \App\Models\AI\ProjectionFutureGoal::create([
+                        'user_id'          => $user->id,
+                        'image'            => $imagePath,
+                        'projection_id'    => $projection->id,
+                        'projection_url'   => $pData['future_goal']['projection_url'] ?? null,
+                        'timeframe'        => $projection->timeframe,
+                        'est_bmi'          => $pData['future_goal']['est_bmi'] ?? null,
+                        'est_weight'       => $pData['future_goal']['est_weight'] ?? null,
+                        'expected_changes' => isset($pData['future_goal']['expected_changes']) ? json_encode($pData['future_goal']['expected_changes']) : null,
+                    ]);
+                }
+
                 // Decrement User Credit
                 $credits->decrement('projection_limit');
+                $remainingLimit = max(0, (int)$credits->fresh()->projection_limit);
                 
                 \Illuminate\Support\Facades\DB::commit();
 
-                return response()->json(['success' => true, 'data' => $projection], 201);
+                $aiDomain = "https://ai.biovuedigitalwellness.com";
+                $pData = $projection->projections_data;
+
+                $formattedProjection = [
+                    'id'               => $projection->id,
+                    'title'            => 'Projection Results',
+                    'subtitle'         => 'Visualizing your trajectory over the next ' . $projection->timeframe,
+                    'timeframe'        => $projection->timeframe,
+                    'input_image'      => asset('storage/' . $projection->input_image),
+                    'remaining_credit' => $remainingLimit,
+                    'current_lifestyle' => [
+                        'label'            => "Current lifestyle trajectory for " . $projection->timeframe,
+                        'image'            => $aiDomain . ($pData['current_lifestyle']['projection_url'] ?? ''),
+                        'timeframe'        => $projection->timeframe,
+                        'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
+                        'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
+                        'expected_changes' => $pData['current_lifestyle']['expected_changes'] ?? [],
+                    ],
+                    'future_goal' => [
+                        'label'            => "Target goal achievement in " . $projection->timeframe,
+                        'image'            => $aiDomain . ($pData['future_goal']['projection_url'] ?? ''),
+                        'timeframe'        => $projection->timeframe,
+                        'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
+                        'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
+                        'expected_changes' => $pData['future_goal']['expected_changes'] ?? [],
+                    ],
+                    'projections' => [
+                        'current_lifestyle' => [
+                            'label'            => "Current lifestyle trajectory for " . $projection->timeframe,
+                            'image'            => $aiDomain . ($pData['current_lifestyle']['projection_url'] ?? ''),
+                            'timeframe'        => $projection->timeframe,
+                            'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
+                            'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
+                            'expected_changes' => $pData['current_lifestyle']['expected_changes'] ?? [],
+                        ],
+                        'future_goal' => [
+                            'label'            => "Target goal achievement in " . $projection->timeframe,
+                            'image'            => $aiDomain . ($pData['future_goal']['projection_url'] ?? ''),
+                            'timeframe'        => $projection->timeframe,
+                            'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
+                            'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
+                            'expected_changes' => $pData['future_goal']['expected_changes'] ?? [],
+                        ]
+                    ],
+                    'summary'          => $projection->summary_data,
+                    'created_at'       => $projection->created_at->format('Y-m-d')
+                ];
+
+                return response()->json([
+                    'success'          => true,
+                    'message'          => 'Projection generated successfully.',
+                    'remaining_credit' => $remainingLimit,
+                    'data'             => $formattedProjection,
+                ], 201);
             }
 
             // 6. Error Handling (Handles 404 No Profile, 500 Server Error etc.)
@@ -285,29 +389,38 @@ class ProjectionController extends Controller
         $aiDomain = "https://ai.biovuedigitalwellness.com";
         $pData = $projection->projections_data;
 
-        return response()->json([
-            'success' => true,
-            'title'   => 'Projection Results',
-            'subtitle' => 'Visualizing your trajectory over the next ' . $projection->timeframe,
-            'input_image' => asset('storage/' . $projection->input_image), 
+        $lifestyleData = [
+            'label'            => "If you continue your current lifestyle without changes for " . $projection->timeframe,
+            'image'            => $aiDomain . ($pData['current_lifestyle']['projection_url'] ?? ''),
+            'timeframe'        => $projection->timeframe,
+            'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
+            'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
+            'expected_changes' => $pData['current_lifestyle']['expected_changes'] ?? [],
+        ];
 
+        $futureGoalData = [
+            'label'            => "Achieving your goal in " . $projection->timeframe,
+            'image'            => $aiDomain . ($pData['future_goal']['projection_url'] ?? ''),
+            'timeframe'        => $projection->timeframe,
+            'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
+            'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
+            'expected_changes' => $pData['future_goal']['expected_changes'] ?? [],
+        ];
+
+        return response()->json([
+            'success'     => true,
+            'title'       => 'Projection Results',
+            'subtitle'    => 'Visualizing your trajectory over the next ' . $projection->timeframe,
+            'timeframe'   => $projection->timeframe,
+            'input_image' => asset('storage/' . $projection->input_image), 
+            'summary'     => $projection->summary_data,
+            'projections' => [
+                'current_lifestyle' => $lifestyleData,
+                'future_goal'       => $futureGoalData,
+            ],
             'data' => [
-                'current_lifestyle' => [
-                    'label'            => "If you continue your current lifestyle without changes for " . $projection->timeframe,
-                    'image'            => $aiDomain . ($pData['current_lifestyle']['projection_url'] ?? ''),
-                    'timeframe'        => $projection->timeframe,
-                    'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
-                    'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
-                    'expected_changes' => $pData['current_lifestyle']['expected_changes'] ?? [],
-                ],
-                'future_goal' => [
-                    'label'            => "Achieving your goal in " . $projection->timeframe,
-                    'image'            => $aiDomain . ($pData['future_goal']['projection_url'] ?? ''),
-                    'timeframe'        => $projection->timeframe,
-                    'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
-                    'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
-                    'expected_changes' => $pData['future_goal']['expected_changes'] ?? [],
-                ]
+                'current_lifestyle' => $lifestyleData,
+                'future_goal'       => $futureGoalData,
             ]
         ]);
     }

@@ -15,5 +15,9 @@
 
     <p>This OTP is valid for a limited time. Please use this code to complete your registration process.</p>
 
+    <p style="font-size: 13px; color: #64748b; margin-top: 15px;">
+        <em>Didn't find this email right away? Please check your spam or junk folder and mark BioVue as a safe sender.</em>
+    </p>
+
     <p>Thanks,<br><strong>{{ config('app.name') }} Team</strong></p>
 @endsection

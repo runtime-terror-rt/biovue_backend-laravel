@@ -274,9 +274,11 @@ class UserController extends Controller
                             ? (float)$matchedSleepLogs->avg('sleep_hours')
                             : (float)($activityLogs->avg('sleep_hours') ?? 0);
 
-            // Calculate daily average hydration
-            $daysCount = max(1, \Carbon\Carbon::parse($startOfWeek)->diffInDays(\Carbon\Carbon::parse($endOfWeek)) + 1);
-            
+            // Calculate daily average hydration based only on logged days
+            $loggedDaysCount = $hydrationLogs->filter(function($log) {
+                return ((float)($log->water_glasses ?? 0) > 0) || ((float)($log->water_oz ?? 0) > 0);
+            })->count();
+
             $totalWaterGlasses = $hydrationLogs->sum('water_glasses');
             $totalWaterOz = $hydrationLogs->sum(function($log) {
                 return isset($log->water_oz) && (float)$log->water_oz > 0 
@@ -284,9 +286,9 @@ class UserController extends Controller
                     : ((float)($log->water_glasses ?? 0) * 8);
             });
 
-            // Daily averages
-            $avgDailyGlasses = round($totalWaterGlasses / $daysCount, 1);
-            $avgDailyOz = round($totalWaterOz / $daysCount, 1);
+            // Daily averages based only on logged days
+            $avgDailyGlasses = $loggedDaysCount > 0 ? round($totalWaterGlasses / $loggedDaysCount, 1) : 0;
+            $avgDailyOz = $loggedDaysCount > 0 ? round($totalWaterOz / $loggedDaysCount, 1) : 0;
 
             // Recommended daily water intake based on profile
             $profileWeight = (float)($user->profile->weight ?? 0);
@@ -301,10 +303,21 @@ class UserController extends Controller
             }
 
             $recommendedGlasses = round($recommendedWaterOz / 8, 0);
-            $waterTarget = (float)($user->targetGoals->water_target ?? 0);
-            if ($waterTarget <= 0) {
-                $waterTarget = $recommendedGlasses;
+            $rawWaterTarget = (float)($user->targetGoals->water_target ?? 0);
+            if ($rawWaterTarget > 30) {
+                // Stored in ounces (e.g. 64, 128 oz)
+                $waterTargetOz = $rawWaterTarget;
+                $waterTargetGlasses = round($waterTargetOz / 8, 1);
+            } elseif ($rawWaterTarget > 0) {
+                // Stored in glasses (e.g. 8 glasses)
+                $waterTargetGlasses = $rawWaterTarget;
+                $waterTargetOz = $waterTargetGlasses * 8;
+            } else {
+                $waterTargetOz = $recommendedWaterOz;
+                $waterTargetGlasses = $recommendedGlasses;
             }
+
+            $waterTarget = $waterTargetGlasses;
 
             $stepGoal    = (int)($user->targetGoals->daily_step_goal   ?? 10000);
             $sleepTarget = (float)($user->targetGoals->sleep_target    ?? 8);
@@ -359,11 +372,11 @@ class UserController extends Controller
                         ],
                         'hydration' => [
                             'current'         => $avgDailyGlasses,
-                            'current_glasses' => $avgDailyGlasses . ' ounces',
+                            'current_glasses' => $avgDailyGlasses . ' glasses',
                             'current_oz'      => $avgDailyOz . ' oz',
-                            'target'          => $waterTarget . ' ounces',
-                            'target_glasses'  => $waterTarget . ' ounces',
-                            'target_oz'       => ($waterTarget * 8) . ' oz',
+                            'target'          => $waterTargetOz . ' oz',
+                            'target_glasses'  => $waterTargetGlasses . ' glasses',
+                            'target_oz'       => $waterTargetOz . ' oz',
                             'recommended_oz'  => $recommendedWaterOz . ' oz',
                         ],
                         'stress_and_mood' => [
@@ -555,7 +568,9 @@ class UserController extends Controller
                 ],
                 'hydration' => [
                     'current' => $avgGlasses . " Glasses (" . $avgOz . " oz)",
-                    'coach_target' => ($user->targetGoals->water_target ?? 8) . " Glasses"
+                    'coach_target' => (($user->targetGoals->water_target ?? 8) > 30) 
+                        ? round(($user->targetGoals->water_target) / 8, 1) . " Glasses (" . $user->targetGoals->water_target . " oz)"
+                        : ($user->targetGoals->water_target ?? 8) . " Glasses"
                 ],
                 'stress' => [
                     'current' => round($stressLogs->avg('stress_level') ?? 0, 1) . "/10",
@@ -660,7 +675,9 @@ class UserController extends Controller
                     ],
                     'hydration' => [
                         'current' => $avgHydrationGlasses . " Glasses (" . $avgHydrationOz . " oz)",
-                        'goal' => ($user->targetGoals->water_target ?? 8) . " Glasses"
+                        'goal' => (($user->targetGoals->water_target ?? 8) > 30) 
+                            ? round(($user->targetGoals->water_target) / 8, 1) . " Glasses (" . $user->targetGoals->water_target . " oz)"
+                            : ($user->targetGoals->water_target ?? 8) . " Glasses"
                     ],
                     'stress' => [
                         'current' => round($stressLogs->avg('stress_level') ?? 0, 1) . "/10",
@@ -824,7 +841,7 @@ class UserController extends Controller
                     'hydration' => [
                         'avg' => $avgOz . " oz",
                         'avg_glasses' => $avgGlasses . " glasses",
-                        'coach_target' => ($target->water_target ? ($target->water_target * 8) : 64) . " oz"
+                        'coach_target' => ($target && $target->water_target ? (($target->water_target > 30) ? $target->water_target : ($target->water_target * 8)) : 64) . " oz"
                     ]
                 ]
             ]
@@ -1392,9 +1409,9 @@ class UserController extends Controller
                 ],
                 'client_table' => $clientsTable,
                 'today_actions' => [
-                    ['title' => 'Review progress', 'desc' => 'Check recent updates', 'link' => '/admin/clients'],
-                    ['title' => 'Send motivation', 'desc' => 'Send encouragement or reminders', 'link' => '/admin/messages'],
-                    ['title' => 'Review check-ins', 'desc' => 'View scheduled check-ins', 'link' => '/admin/calendar']
+                    ['title' => 'Review progress', 'desc' => 'Check recent updates', 'link' => '/trainer-dashboard/clients'],
+                    ['title' => 'Send motivation', 'desc' => 'Send encouragement or reminders', 'link' => '/trainer-dashboard/messages'],
+                    ['title' => 'Review check-ins', 'desc' => 'View scheduled check-ins', 'link' => '/trainer-dashboard/calendar']
                 ]
             ], 200);
 

@@ -251,26 +251,10 @@ public function assignUsers(Request $request)
     {
         $user = $request->user();
         $unread = $user->unreadNotifications->map(function ($notification) use ($user) {
+            $notificationController = app(\App\Http\Controllers\Notification\NotificationController::class);
+            $url = $notificationController->resolveNotificationUrl($notification, $user);
+
             $data = $notification->data ?? [];
-            $type = $data['type'] ?? $notification->type ?? null;
-            $userType = $user->user_type ?? 'individual';
-
-            $url = $data['url'] 
-                ?? $data['action_url'] 
-                ?? $data['link'] 
-                ?? match ($type) {
-                    'coach_message' => ($userType === 'professional') ? '/admin/messages' : '/messages',
-                    'client_message' => '/admin/messages',
-                    'program_assigned' => !empty($data['program_id']) ? '/user-programs?program_id=' . $data['program_id'] : '/user-programs',
-                    'goal_updates', 'goal_message', 'milestone_message' => '/goals',
-                    'insight_msg' => '/insights',
-                    'schedule_created', 'schedule_updated', 'schedule_reminder', 'reminder_message' => '/calendar',
-                    'connection_cancelled', 'connection_request' => ($userType === 'professional') ? '/clients' : '/connected-professions',
-                    'subscription_message', 'subscription_updates' => '/pricing',
-                    'registration_message' => '/admin/users',
-                    default => !empty($data['program_id']) ? '/user-programs' : (!empty($data['schedule_id']) ? '/calendar' : (($userType === 'professional') ? '/trainer-overview' : '/user-dashboard')),
-                };
-
             $data['url'] = $url;
             $data['action_url'] = $url;
             $data['link'] = $url;
@@ -278,7 +262,6 @@ public function assignUsers(Request $request)
             $notification->setAttribute('url', $url);
             $notification->setAttribute('action_url', $url);
             $notification->setAttribute('link', $url);
-
             return $notification;
         });
 

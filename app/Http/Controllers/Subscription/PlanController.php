@@ -41,8 +41,16 @@ class PlanController extends Controller
             $data = Cache::remember($cacheKey, 3600, function () use ($type, $billing) {
                 $query = Plan::query(); 
 
-                if ($type && in_array($type, ['individual', 'professional'])) {
-                    $query->where('plan_type', $type);
+                if ($type) {
+                    if (in_array($type, ['supplier', 'supplement_supplier'])) {
+                        $query->where('plan_type', 'professional')
+                              ->where('name', 'LIKE', '%Supplier%');
+                    } elseif (in_array($type, ['coach', 'trainer_coach', 'trainer'])) {
+                        $query->where('plan_type', 'professional')
+                              ->where('name', 'NOT LIKE', '%Supplier%');
+                    } elseif (in_array($type, ['individual', 'professional'])) {
+                        $query->where('plan_type', $type);
+                    }
                 }
 
                 $plans = $query->latest()->get();

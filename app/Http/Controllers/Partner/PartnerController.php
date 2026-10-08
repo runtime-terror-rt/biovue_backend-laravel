@@ -45,7 +45,7 @@ class PartnerController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('partners', 'public');
+            $path = \App\Services\ImageOptimizerService::storeOptimized($request->file('image'), 'partners');
             $validated['image_url'] = $path;
         }
 
@@ -93,7 +93,7 @@ class PartnerController extends Controller
                 Storage::disk('public')->delete($oldPath);
             }
             
-            $validated['image_url'] = $request->file('image')->store('partners', 'public');
+            $validated['image_url'] = \App\Services\ImageOptimizerService::storeOptimized($request->file('image'), 'partners');
         }
 
         $partner->update($validated);

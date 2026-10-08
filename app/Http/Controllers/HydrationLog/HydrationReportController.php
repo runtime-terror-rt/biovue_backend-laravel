@@ -31,9 +31,22 @@ class HydrationReportController extends Controller
                 ->keyBy(fn($item) => \Carbon\Carbon::parse($item->log_date)->format('Y-m-d'));
 
             // ৩. টার্গেট এবং প্রফেশনাল নোটস আনা
-            $waterTarget = DB::table('target_goals')
+            $rawWaterTarget = DB::table('target_goals')
                 ->where('user_id', $id)
-                ->value('water_target') ?? 0; // এটি গ্লাসে বা লিটারে হতে পারে
+                ->value('water_target') ?? 0;
+
+            if ($rawWaterTarget > 30) {
+                // Stored in ounces (e.g. 64, 128 oz)
+                $targetOz = (float) $rawWaterTarget;
+                $targetGlasses = round($targetOz / 8, 1);
+            } elseif ($rawWaterTarget > 0) {
+                // Stored in glasses (e.g. 8, 16 glasses)
+                $targetGlasses = (float) $rawWaterTarget;
+                $targetOz = round($targetGlasses * 8, 1);
+            } else {
+                $targetGlasses = 8;
+                $targetOz = 64;
+            }
 
             $notes = DB::table('profession_notes')
                 ->join('users as professionals', 'profession_notes.profession_id', '=', 'professionals.id')
@@ -73,18 +86,19 @@ class HydrationReportController extends Controller
                     'label' => $days > 15 ? \Carbon\Carbon::parse($currentDate)->format('d M') : \Carbon\Carbon::parse($currentDate)->format('D'),
                     'glasses' => $glasses,
                     'water_oz' => $oz,
-                    'target' => (float) $waterTarget,
+                    'target' => (float) $targetGlasses,
+                    'target_oz' => (float) $targetOz,
                 ];
 
                 if ($glasses > 0) $loggedDaysCount++;
             }
 
-            // ৫. স্ট্যাটিস্টিকস ক্যালকুলেশন (মোট দিন দিয়ে ভাগ)
-            $avgWater = ($days > 0) ? ($totalGlasses / $days) : 0;
+            // ৫. স্ট্যাটিস্টিকস ক্যালকুলেশন (শুধুমাত্র যে কয়দিন ডাটা লগ করা হয়েছে তা দিয়ে ভাগ)
+            $avgWater = ($loggedDaysCount > 0) ? ($totalGlasses / $loggedDaysCount) : 0;
             $consistency = ($days > 0) ? round(($loggedDaysCount / $days) * 100) : 0;
 
             // ট্রেন্ড লজিক
-            $currentTrend = ($avgWater >= $waterTarget && $waterTarget > 0) ? 'Improving' : 'Stable';
+            $currentTrend = ($avgWater >= $targetGlasses && $targetGlasses > 0) ? 'Improving' : 'Stable';
 
             return response()->json([
                 'success' => true,
@@ -93,7 +107,7 @@ class HydrationReportController extends Controller
                     'chart_data' => $chartData,
                     'statistics' => [
                         'average_water' => round($avgWater, 1) . ' Glasses (' . round($avgWater * 8, 1) . ' oz)',
-                        'water_target' => round($waterTarget, 1) . ' Glasses (' . round($waterTarget * 8, 1) . ' oz)',
+                        'water_target' => round($targetGlasses, 1) . ' Glasses (' . round($targetOz, 1) . ' oz)',
                         'best_streak' => $this->calculateStreak($id, 'hydration_logs') . ' DAYS',
                         'consistency' => $consistency . '%',
                         'current_trend' => $currentTrend 

@@ -36,22 +36,41 @@ class MessageController extends Controller
 
         $receiver = User::find($request->receiver_id);
         $settings = UserNotificationSetting::where('user_id', $receiver->id)->first();
+        $sender = Auth::user();
 
         Log::info('Notification Debug:', [
+            'sender_id' => $sender->id,
             'receiver_id' => $receiver->id,
             'user_type' => $receiver->user_type,
-            'coach_enabled' => $settings->coach_messages ?? 'Not Set (Default 0)',
-            'client_enabled' => $settings->client_messages ?? 'Not Set (Default 0)'
+            'coach_enabled' => $settings->coach_messages ?? 'Not Set (Default 1)',
+            'client_enabled' => $settings->client_messages ?? 'Not Set (Default 1)'
         ]);
 
         try {
-            if ($receiver->user_type === 'individual' && ($settings->coach_messages ?? 0) == 1) {
-                $receiver->notify(new CoachMessageNotification('New Coach Message', $request->message, 'coach_message'));
-                Log::info("Coach notification sent to User ID: {$receiver->id}");
-            } 
-            elseif (($settings->client_messages ?? 0) == 1) {
-                $receiver->notify(new ClientMessageNotification('New Client Message', $request->message, 'client_message'));
-                Log::info("Client notification sent to User ID: {$receiver->id}");
+            $senderRole = ($sender->profession_type === 'supplement_supplier') ? 'Supplier' : (($sender->user_type === 'professional') ? 'Coach' : 'Client');
+            $notificationTitle = "New {$senderRole} Message from {$sender->name}";
+
+            if ($receiver->user_type === 'individual') {
+                $coachEnabled = $settings ? ((int)$settings->coach_messages === 1) : true;
+                if ($coachEnabled) {
+                    $receiver->notify(new CoachMessageNotification(
+                        $notificationTitle, 
+                        $request->message, 
+                        'coach_message', 
+                        ['sender_id' => $sender->id, 'sender_name' => $sender->name, 'sender_type' => $senderRole]
+                    ));
+                    Log::info("{$senderRole} notification sent to Client ID: {$receiver->id}");
+                }
+            } else {
+                $clientEnabled = $settings ? ((int)$settings->client_messages === 1) : true;
+                if ($clientEnabled) {
+                    $receiver->notify(new ClientMessageNotification(
+                        "New Message from {$sender->name}", 
+                        $request->message, 
+                        'client_message'
+                    ));
+                    Log::info("Client notification sent to Professional/Supplier ID: {$receiver->id}");
+                }
             }
         } catch (\Exception $e) {
             Log::error("Notification process failed for User ID: {$receiver->id}. Error: " . $e->getMessage());

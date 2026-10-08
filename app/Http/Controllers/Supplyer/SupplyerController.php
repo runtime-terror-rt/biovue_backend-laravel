@@ -152,11 +152,17 @@ class SupplyerController extends Controller
             $user = User::with(['targetGoals', 'profile'])->findOrFail($request->user_id);
             $recommended = $user->targetGoals?->supplement_recommendation ?? [];
 
-            if (is_string($recommended)) {
-                $recommended = json_decode($recommended, true) ?? [];
+            if (empty($recommended)) {
+                $latestProgram = \App\Models\ProgramSet::where('user_id', $user->id)->latest()->first();
+                if ($latestProgram) {
+                    $recommended = $latestProgram->supplement_recommendation ?? $latestProgram->supplement ?? [];
+                }
             }
 
-            $supplierId = auth()->id();
+            if (is_string($recommended)) {
+                $recommended = json_decode($recommended, true) ?? array_filter(array_map('trim', explode(',', $recommended)));
+            }
+
             $matches = [];
 
             foreach ((array)$recommended as $rec) {
@@ -165,10 +171,17 @@ class SupplyerController extends Controller
                 if (empty($keyword)) continue;
 
                 $products = Product::where('status', 'published')
-                    ->where(function ($q) use ($supplierId, $keyword) {
+                    ->where(function ($q) use ($keyword) {
                         $q->where('name', 'LIKE', "%{$keyword}%")
                           ->orWhere('description', 'LIKE', "%{$keyword}%")
                           ->orWhere('category', 'LIKE', "%{$keyword}%");
+
+                        $words = array_filter(explode(' ', $keyword), fn($w) => strlen(trim($w)) >= 3);
+                        foreach ($words as $word) {
+                            $w = trim($word);
+                            $q->orWhere('name', 'LIKE', "%{$w}%")
+                              ->orWhere('category', 'LIKE', "%{$w}%");
+                        }
                     })
                     ->get()
                     ->map(function ($p) {
@@ -181,11 +194,13 @@ class SupplyerController extends Controller
                         ];
                     });
 
-                $matches[] = [
-                    'recommended_supplement' => $keyword,
-                    'matched_products_count' => $products->count(),
-                    'products'               => $products,
-                ];
+                if ($products->isNotEmpty()) {
+                    $matches[] = [
+                        'recommended_supplement' => $keyword,
+                        'matched_products_count' => $products->count(),
+                        'products'               => $products,
+                    ];
+                }
             }
 
             if (empty($matches)) {

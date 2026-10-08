@@ -60,6 +60,25 @@ class ProjectionLifestyleController extends Controller
                 ->first();
 
             if (!$projection) {
+                $latestData = \App\Models\ProjectionData::where('user_id', $user_id)->latest()->first();
+                if ($latestData) {
+                    $aiDomain = "https://ai.biovuedigitalwellness.com";
+                    $pData = $latestData->projections_data['current_lifestyle'] ?? [];
+                    return response()->json([
+                        'message' => 'Projection retrieved successfully',
+                        'data' => [
+                            'user_id'          => (int)$user_id,
+                            'image'            => asset('storage/' . $latestData->input_image),
+                            'projection_id'    => $latestData->projection_id,
+                            'projection_url'   => isset($pData['projection_url']) ? $aiDomain . $pData['projection_url'] : null,
+                            'timeframe'        => $latestData->timeframe,
+                            'est_bmi'          => $pData['est_bmi'] ?? null,
+                            'est_weight'       => $pData['est_weight'] ?? null,
+                            'expected_changes' => $pData['expected_changes'] ?? [],
+                        ]
+                    ]);
+                }
+
                 return response()->json([
                     'message' => 'No projection found for this user'
                 ], 404);

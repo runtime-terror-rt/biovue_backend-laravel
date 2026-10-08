@@ -50,7 +50,7 @@ class ProductController extends Controller
         ]);
 
         if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('products', 'public');
+            $path = \App\Services\ImageOptimizerService::storeOptimized($request->file('image'), 'products');
             $validated['image'] = $path; 
         }
 
@@ -282,7 +282,7 @@ class ProductController extends Controller
                 if ($product->image) {
                     Storage::disk('public')->delete($product->image);
                 }
-                $validated['image'] = $request->file('image')->store('products', 'public');
+                $validated['image'] = \App\Services\ImageOptimizerService::storeOptimized($request->file('image'), 'products');
             }
 
             $product->update($validated);

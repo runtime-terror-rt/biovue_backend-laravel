@@ -177,6 +177,29 @@ class PlansSeeder extends Seeder
                     'Quarterly business reviews'
                 ],
             ],
+
+            // ================= SUPPLIER BUSINESS PLANS =================
+            [
+                'name' => 'Supplier Business Plan',
+                'plan_type' => 'professional',
+                'user_id' => $admin->id,
+                'billing_cycle' => 'monthly',
+                'duration' => null,
+                'price' => 99,
+                'member_limit' => null,
+                'projection_limit' => 0,
+                'status' => true,
+                'features' => [
+                    'Dedicated Supplement Supplier Catalog',
+                    'Unlimited Product Listings & Publishing',
+                    'AI "Find Match" Supplement Recommendation Engine',
+                    'Direct Client Messaging & Inquiries',
+                    'Custom Product Links & Affiliate Redirection',
+                    'Supplier Analytics & Catalog Performance Dashboard',
+                    'Weekly Business Summary & Product Match Reports',
+                    'Dedicated Account & Priority Supplier Support'
+                ],
+            ],
         ];
 
         foreach ($plans as $plan) {

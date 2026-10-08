@@ -27,18 +27,46 @@ class ClientMessageNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        $channels = ['database'];
+        if (!empty($notifiable->email)) {
+            $channels[] = 'mail';
+        }
+        return $channels;
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        $targetUrl = match(true) {
+            $notifiable->profession_type === 'supplement_supplier' => '/supplier-dashboard/messages',
+            $notifiable->user_type === 'professional' => '/trainer-dashboard/messages',
+            default => '/user-dashboard/messages',
+        };
+
+        return (new MailMessage)
+            ->subject($this->title ?? 'New Message on BioVue')
+            ->greeting("Hello {$notifiable->name},")
+            ->line("You received a new message on BioVue:")
+            ->line('"' . $this->message . '"')
+            ->action('View & Respond to Message', url($targetUrl))
+            ->line('Thank you for connecting with your clients on BioVue!')
+            ->salutation('Best regards, The BioVue Team');
     }
 
     public function toDatabase($notifiable)
     {
+        $targetUrl = match(true) {
+            $notifiable->profession_type === 'supplement_supplier' => '/supplier-dashboard/messages',
+            $notifiable->user_type === 'professional' => '/trainer-dashboard/messages',
+            default => '/user-dashboard/messages',
+        };
+
         return [
             'title' => $this->title,
             'message' => $this->message,
             'type' => $this->type,
-            'url' => '/admin/messages',
-            'action_url' => '/admin/messages',
-            'link' => '/admin/messages',
+            'url' => $targetUrl,
+            'action_url' => $targetUrl,
+            'link' => $targetUrl,
         ];
     }
 }
