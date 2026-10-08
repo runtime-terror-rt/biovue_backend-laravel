@@ -372,7 +372,7 @@ class UserController extends Controller
                         ],
                         'hydration' => [
                             'current'         => $avgDailyGlasses,
-                            'current_glasses' => $avgDailyGlasses . ' glasses',
+                            'current_glasses' => $avgDailyGlasses . ' ounces',
                             'current_oz'      => $avgDailyOz . ' oz',
                             'target'          => $waterTargetOz . ' oz',
                             'target_glasses'  => $waterTargetGlasses . ' glasses',
