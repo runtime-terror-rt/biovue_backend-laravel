@@ -90,6 +90,28 @@ class PlansSeeder extends Seeder
             // ================= PROFESSIONAL PLANS =================
 
             [
+                'name' => 'BioVue Wellness Pro Support Network',
+                'plan_type' => 'professional',
+                'user_id' => $admin->id,
+                'billing_cycle' => 'monthly',
+                'duration' => null,
+                'price' => 10,
+                'member_limit' => 0,
+                'projection_limit' => 0,
+                'status' => true,
+                'features' => [
+                    'Featured listing on the BioVue Support page',
+                    'Visibility to users actively seeking wellness support',
+                    'Profile with bio, specialties, and contact options',
+                    'Direct connection requests from interested users',
+                    'Increased exposure within the BioVue community',
+                    'Early access to a growing wellness platform',
+                    'Quick setup with no client management required',
+                    "Help users find the right support when they're ready to take action."
+                ],
+            ],
+
+            [
                 'name' => 'Tier 1 Professional',
                 'plan_type' => 'professional',
                 'user_id' => $admin->id,

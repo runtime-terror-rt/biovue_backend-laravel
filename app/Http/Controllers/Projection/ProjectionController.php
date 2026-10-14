@@ -42,10 +42,11 @@ class ProjectionController extends Controller
             ]);
         }
 
-        $aiDomain = "https://ai.biovuedigitalwellness.com";
-
-        $formattedData = $projections->map(function($projection) use ($aiDomain) {
+        $formattedData = $projections->map(function($projection) {
             $pData = $projection->projections_data;
+
+            $currentLifestyleUrl = $this->resolveProjectionImageUrl($pData['current_lifestyle'] ?? null);
+            $futureGoalUrl       = $this->resolveProjectionImageUrl($pData['future_goal'] ?? null);
 
             return [
                 'id' => $projection->id,
@@ -56,7 +57,7 @@ class ProjectionController extends Controller
                 'projections' => [
                     'current_lifestyle' => [
                         'label'            => "Current lifestyle trajectory for " . $projection->timeframe,
-                        'image'            => $aiDomain . ($pData['current_lifestyle']['projection_url'] ?? ''),
+                        'image'            => $currentLifestyleUrl,
                         'timeframe'        => $projection->timeframe,
                         'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
                         'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
@@ -64,7 +65,7 @@ class ProjectionController extends Controller
                     ],
                     'future_goal' => [
                         'label'            => "Target goal achievement in " . $projection->timeframe,
-                        'image'            => $aiDomain . ($pData['future_goal']['projection_url'] ?? ''),
+                        'image'            => $futureGoalUrl,
                         'timeframe'        => $projection->timeframe,
                         'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
                         'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
@@ -109,33 +110,78 @@ class ProjectionController extends Controller
 
         // Plan and feature permission check:
         $userPlan = $user->plan;
+        if (!$userPlan) {
+            $latestPaid = \App\Models\PlanPayment::where('user_id', $user->id)
+                ->whereIn('status', ['paid', 'active'])
+                ->latest()
+                ->first();
+            if ($latestPaid && $latestPaid->plan) {
+                $userPlan = $latestPaid->plan;
+            }
+        }
+
         $planName = strtolower($userPlan?->name ?? 'free');
         $isPremium = str_contains($planName, 'premium');
         $isPlus    = str_contains($planName, 'plus');
-        $isFree    = !$isPremium && !$isPlus;
 
-        $timeframe  = strtolower(trim($request->timeframe));
-        $resolution = strtolower(trim($request->resolution));
+        // Check if user is an invited client under a trainer
+        $hasTrainerConnection = \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
+            ->where('user_id', $user->id)
+            ->exists();
+        $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
+
+        // If user has no personal paid plan but is an invited client, grant Plus-tier feature permissions (6mo/1yr, 1k/2k)
+        if (!$isPremium && !$isPlus && $isInvited) {
+            $isPlus = true;
+        }
+
+        $isFree = !$isPremium && !$isPlus;
+
+        $timeframeRaw  = strtolower(trim($request->timeframe));
+        $resolutionRaw = strtoupper(trim($request->resolution));
 
         // 4k resolution is hidden for future use
-        if ($resolution === '4k') {
+        if ($resolutionRaw === '4K') {
             return response()->json([
                 'success' => false,
                 'message' => '4K resolution is currently not supported. Please choose 1K or 2K resolution.'
             ], 422);
         }
 
-        // Resolution limits: Free and Plus only get 1k; Premium gets 1k and 2k
-        if (($isFree || $isPlus) && $resolution !== '1k') {
+        // Normalize resolution: default to '1K' or '2K'
+        $normalizedResolution = in_array($resolutionRaw, ['1K', '2K']) ? $resolutionRaw : '1K';
+
+        // Resolution limits: Free Trial only gets 1k; Plus and Premium get both 1k and 2k
+        if ($isFree && $normalizedResolution !== '1K') {
             return response()->json([
                 'success' => false,
-                'message' => 'Your subscription plan only supports 1K resolution. Upgrade to Premium for 2K resolution.'
+                'message' => 'Your subscription plan only supports 1K resolution. Upgrade to Plus or Premium for 2K resolution.'
             ], 403);
         }
 
+        // Timeframe normalization & variants
+        $sixMonthVariants = ['6_month', '6month', '6 month', '6-month', '6_months', '6 months', '6-months', '6 mo', '6mo', '6 mos', '6mos', '6m'];
+        $oneYearVariants  = ['1_year', '1year', '1 year', '1-year', '1_years', '1 years', '1-years', '1 yr', '1yr', '1 yrs', '1yrs', '1y'];
+        $fiveYearVariants = ['5_year', '5year', '5 year', '5', '5-year', '5_years', '5 years', '5-years', '5 yr', '5yr', '5 yrs', '5yrs', '5y'];
+
+        $is6Month = in_array($timeframeRaw, $sixMonthVariants);
+        $is5Year  = in_array($timeframeRaw, $fiveYearVariants);
+        $is1Year  = in_array($timeframeRaw, $oneYearVariants);
+
+        // Canonical duration for AI API (FastAPI expects strict enum: '6 months', '1 year', '5 years')
+        if ($is6Month) {
+            $aiDuration = '6 months';
+            $canonicalTimeframe = '6_month';
+        } elseif ($is5Year) {
+            $aiDuration = '5 years';
+            $canonicalTimeframe = '5_year';
+        } else {
+            $aiDuration = '1 year';
+            $canonicalTimeframe = '1_year';
+        }
+
         // Timeframe limits: Free trial only gets 1_year
-        $restrictedFreeVariants = ['6_month', '6month', '6 month', '6-month', '5_year', '5year', '5 year', '5', '5-year', '5_years', '5 years'];
-        if ($isFree && in_array($timeframe, $restrictedFreeVariants)) {
+        if ($isFree && ($is6Month || $is5Year)) {
             return response()->json([
                 'success' => false,
                 'message' => 'The Free Trial is only available for 1-Year projections. 6-Month and 5-Year options require a Plus or Premium subscription.'
@@ -143,8 +189,7 @@ class ProjectionController extends Controller
         }
 
         // Plus users cannot access 5_year projections
-        $fiveYearVariants = ['5_year', '5year', '5 year', '5', '5-year', '5_years', '5 years', '5-years'];
-        if ($isPlus && in_array($timeframe, $fiveYearVariants)) {
+        if ($isPlus && $is5Year) {
             return response()->json([
                 'success' => false,
                 'message' => '5-Year projections and health insights are exclusively available on the Premium plan. Please upgrade to Premium.'
@@ -186,14 +231,34 @@ class ProjectionController extends Controller
                 )
                 // FastAPI Form parameters
                 ->attach('user_id', (string) $user->id) 
-                ->attach('duration', (string) $request->timeframe) 
-                ->attach('resolution', (string) $request->resolution)
+                ->attach('duration', $aiDuration) 
+                ->attach('resolution', $normalizedResolution) 
                 ->attach('use_default_goal', 'true') 
                 ->post('https://ai.biovuedigitalwellness.com/api/v1/projection/combined/');
 
             // 5. Handling Response
             if ($response->successful()) {
                 $aiData = $response->json();
+                $pData = $aiData['projections'] ?? [];
+
+                // Automatically download & store AI generated projection images on Hostinger storage
+                $localCurrentPath = $this->storeRemoteProjectionImage(
+                    $pData['current_lifestyle']['projection_url'] ?? null, 
+                    $user->id, 
+                    'current'
+                );
+                if ($localCurrentPath) {
+                    $pData['current_lifestyle']['local_image'] = $localCurrentPath;
+                }
+
+                $localGoalPath = $this->storeRemoteProjectionImage(
+                    $pData['future_goal']['projection_url'] ?? null, 
+                    $user->id, 
+                    'goal'
+                );
+                if ($localGoalPath) {
+                    $pData['future_goal']['local_image'] = $localGoalPath;
+                }
 
                 \Illuminate\Support\Facades\DB::beginTransaction();
 
@@ -202,22 +267,19 @@ class ProjectionController extends Controller
                     'projection_id'    => $aiData['projection_id'],
                     'user_id'          => $user->id,
                     'input_image'      => $imagePath,
-                    'timeframe'        => $aiData['timeframe'] ?? $request->timeframe,
-                    'resolution'       => $aiData['resolution'] ?? $request->resolution,
-                    'projections_data' => $aiData['projections'], 
+                    'timeframe'        => $aiData['timeframe'] ?? $canonicalTimeframe,
+                    'resolution'       => $aiData['resolution'] ?? $normalizedResolution,
+                    'projections_data' => $pData, 
                     'summary_data'     => $aiData['summary'] ?? null, 
                 ]);
 
                 // Sync to separate projection tables for backward compatibility
-                $aiDomain = "https://ai.biovuedigitalwellness.com";
-                $pData = $projection->projections_data;
-
                 if (isset($pData['current_lifestyle'])) {
                     \App\Models\AI\ProjectionLifestyle::create([
                         'user_id'          => $user->id,
                         'image'            => $imagePath,
                         'projection_id'    => $projection->id,
-                        'projection_url'   => $pData['current_lifestyle']['projection_url'] ?? null,
+                        'projection_url'   => $localCurrentPath ? asset('storage/' . $localCurrentPath) : ($pData['current_lifestyle']['projection_url'] ?? null),
                         'timeframe'        => $projection->timeframe,
                         'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? null,
                         'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? null,
@@ -230,7 +292,7 @@ class ProjectionController extends Controller
                         'user_id'          => $user->id,
                         'image'            => $imagePath,
                         'projection_id'    => $projection->id,
-                        'projection_url'   => $pData['future_goal']['projection_url'] ?? null,
+                        'projection_url'   => $localGoalPath ? asset('storage/' . $localGoalPath) : ($pData['future_goal']['projection_url'] ?? null),
                         'timeframe'        => $projection->timeframe,
                         'est_bmi'          => $pData['future_goal']['est_bmi'] ?? null,
                         'est_weight'       => $pData['future_goal']['est_weight'] ?? null,
@@ -244,8 +306,8 @@ class ProjectionController extends Controller
                 
                 \Illuminate\Support\Facades\DB::commit();
 
-                $aiDomain = "https://ai.biovuedigitalwellness.com";
-                $pData = $projection->projections_data;
+                $currentLifestyleUrl = $this->resolveProjectionImageUrl($pData['current_lifestyle'] ?? null);
+                $futureGoalUrl       = $this->resolveProjectionImageUrl($pData['future_goal'] ?? null);
 
                 $formattedProjection = [
                     'id'               => $projection->id,
@@ -256,7 +318,7 @@ class ProjectionController extends Controller
                     'remaining_credit' => $remainingLimit,
                     'current_lifestyle' => [
                         'label'            => "Current lifestyle trajectory for " . $projection->timeframe,
-                        'image'            => $aiDomain . ($pData['current_lifestyle']['projection_url'] ?? ''),
+                        'image'            => $currentLifestyleUrl,
                         'timeframe'        => $projection->timeframe,
                         'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
                         'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
@@ -264,7 +326,7 @@ class ProjectionController extends Controller
                     ],
                     'future_goal' => [
                         'label'            => "Target goal achievement in " . $projection->timeframe,
-                        'image'            => $aiDomain . ($pData['future_goal']['projection_url'] ?? ''),
+                        'image'            => $futureGoalUrl,
                         'timeframe'        => $projection->timeframe,
                         'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
                         'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
@@ -273,7 +335,7 @@ class ProjectionController extends Controller
                     'projections' => [
                         'current_lifestyle' => [
                             'label'            => "Current lifestyle trajectory for " . $projection->timeframe,
-                            'image'            => $aiDomain . ($pData['current_lifestyle']['projection_url'] ?? ''),
+                            'image'            => $currentLifestyleUrl,
                             'timeframe'        => $projection->timeframe,
                             'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
                             'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
@@ -281,7 +343,7 @@ class ProjectionController extends Controller
                         ],
                         'future_goal' => [
                             'label'            => "Target goal achievement in " . $projection->timeframe,
-                            'image'            => $aiDomain . ($pData['future_goal']['projection_url'] ?? ''),
+                            'image'            => $futureGoalUrl,
                             'timeframe'        => $projection->timeframe,
                             'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
                             'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
@@ -386,12 +448,14 @@ class ProjectionController extends Controller
     {
         $projection = ProjectionData::where('user_id', auth()->id())->findOrFail($id);
         
-        $aiDomain = "https://ai.biovuedigitalwellness.com";
         $pData = $projection->projections_data;
+
+        $currentLifestyleUrl = $this->resolveProjectionImageUrl($pData['current_lifestyle'] ?? null);
+        $futureGoalUrl       = $this->resolveProjectionImageUrl($pData['future_goal'] ?? null);
 
         $lifestyleData = [
             'label'            => "If you continue your current lifestyle without changes for " . $projection->timeframe,
-            'image'            => $aiDomain . ($pData['current_lifestyle']['projection_url'] ?? ''),
+            'image'            => $currentLifestyleUrl,
             'timeframe'        => $projection->timeframe,
             'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
             'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
@@ -400,7 +464,7 @@ class ProjectionController extends Controller
 
         $futureGoalData = [
             'label'            => "Achieving your goal in " . $projection->timeframe,
-            'image'            => $aiDomain . ($pData['future_goal']['projection_url'] ?? ''),
+            'image'            => $futureGoalUrl,
             'timeframe'        => $projection->timeframe,
             'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
             'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
@@ -423,5 +487,79 @@ class ProjectionController extends Controller
                 'future_goal'       => $futureGoalData,
             ]
         ]);
+    }
+
+    /**
+     * Download AI-generated projection image from remote Python FastAPI service and store locally on Hostinger storage.
+     *
+     * @param string|null $urlPath
+     * @param int $userId
+     * @param string $type
+     * @return string|null Relative storage path (e.g. 'projections/ai_generated/proj_1_current_1728888888_abc123.jpg')
+     */
+    protected function storeRemoteProjectionImage(?string $urlPath, int $userId, string $type): ?string
+    {
+        if (empty($urlPath)) {
+            return null;
+        }
+
+        try {
+            // Build full download URL
+            $fullUrl = (str_starts_with($urlPath, 'http://') || str_starts_with($urlPath, 'https://'))
+                ? $urlPath
+                : 'https://ai.biovuedigitalwellness.com/' . ltrim($urlPath, '/');
+
+            // Download with reasonable timeout
+            $response = \Illuminate\Support\Facades\Http::timeout(60)->get($fullUrl);
+
+            if ($response->successful()) {
+                $dir = 'projections/ai_generated';
+                if (!\Illuminate\Support\Facades\Storage::disk('public')->exists($dir)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory($dir);
+                }
+
+                $filename = $dir . '/proj_' . $userId . '_' . $type . '_' . time() . '_' . \Illuminate\Support\Str::random(8) . '.jpg';
+                \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $response->body());
+
+                return $filename;
+            } else {
+                \Illuminate\Support\Facades\Log::warning("Failed to download AI projection image from {$fullUrl}: HTTP " . $response->status());
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error("Error saving AI projection image locally: " . $e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve public URL for projection image (local Hostinger asset if saved, else fallback to remote AI domain).
+     *
+     * @param array|null $item
+     * @return string
+     */
+    protected function resolveProjectionImageUrl(?array $item): string
+    {
+        if (empty($item)) {
+            return '';
+        }
+
+        // 1. If stored locally and file exists on public disk
+        if (!empty($item['local_image'])) {
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($item['local_image'])) {
+                return asset('storage/' . $item['local_image']);
+            }
+        }
+
+        // 2. Fallback to remote AI server URL
+        if (!empty($item['projection_url'])) {
+            $url = $item['projection_url'];
+            if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
+                return $url;
+            }
+            return 'https://ai.biovuedigitalwellness.com/' . ltrim($url, '/');
+        }
+
+        return '';
     }
 }

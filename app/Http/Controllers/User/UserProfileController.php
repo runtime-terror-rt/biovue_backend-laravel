@@ -298,6 +298,10 @@ class UserProfileController extends Controller
             ->first();
 
         $userPlan = $user->plan;
+        if (!$userPlan && $latestPayment && $latestPayment->plan) {
+            $userPlan = $latestPayment->plan;
+        }
+
         $planName = strtolower($userPlan?->name ?? 'free trial');
         $isFreeTrial = str_contains($planName, 'free') || ($latestPayment && $latestPayment->is_trial);
 
@@ -338,11 +342,28 @@ class UserProfileController extends Controller
         // Feature permissions by plan
         $isPremium = str_contains($planName, 'premium');
         $isPlus    = str_contains($planName, 'plus');
+
+        // Check trainer connection for invited clients
+        $hasTrainerConnection = \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
+            ->where('user_id', $user->id)
+            ->exists();
+        $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
+
+        // If user has no personal paid plan but is an invited client, grant Plus-tier feature permissions
+        if (!$isPremium && !$isPlus && $isInvited) {
+            $isPlus = true;
+        }
+
         $allowedTimeframes = ['1_year'];
         if ($isPlus) {
             $allowedTimeframes = ['6_month', '1_year'];
         } elseif ($isPremium) {
             $allowedTimeframes = ['6_month', '1_year', '5_year'];
+        }
+
+        $allowedResolutions = ['1K'];
+        if ($isPlus || $isPremium) {
+            $allowedResolutions = ['1K', '2K'];
         }
 
         $projectionsCount = \App\Models\ProjectionData::where('user_id', $user->id)->count();
@@ -357,8 +378,11 @@ class UserProfileController extends Controller
             'is_cancelled'         => $isCancelled,
             'is_trial'             => $isFreeTrial,
             'has_active_paid'      => $activePaidSub,
-            'plan_name'            => $userPlan?->name ?? 'Free Trial',
+            'plan_name'            => $userPlan?->name ?? ($isInvited ? 'Client Access' : 'Free Trial'),
             'allowed_timeframes'   => $allowedTimeframes,
+            'allowed_resolutions'  => $allowedResolutions,
+            'can_access_5_year'    => $isPremium,
+            'can_access_2k'        => ($isPlus || $isPremium),
             'has_projections'      => $projectionsCount > 0,
             'total_projections'    => $projectionsCount,
             'latest_projection_id' => $latestProjection?->id,
