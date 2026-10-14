@@ -28,8 +28,10 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'data.access' => CheckDataAccess::class,
+            'api.key'     => \App\Http\Middleware\ExternalApiKeyAuth::class,
         ]);
 
+        $middleware->prependToGroup('api', \App\Http\Middleware\ExternalApiKeyAuth::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

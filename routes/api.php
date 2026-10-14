@@ -354,14 +354,25 @@ Route::prefix('v1')->group(function () {
 
         Route::get('/admin/external-apis', [ExternalApiController::class, 'index']);
         Route::get('/external-api', [ExternalApiController::class, 'show']);
+        Route::post('/external-api/generate', [ExternalApiController::class, 'generateOrRegenerateKey']);
+        Route::post('/external-api/regenerate', [ExternalApiController::class, 'generateOrRegenerateKey']);
         Route::get('/external-api/reveal', [ExternalApiController::class, 'revealApiKey']);
         Route::get('/external-api/developer-profile', [ExternalApiController::class, 'getDeveloperProfile']);
+        Route::get('/external-api/balance', [ExternalApiController::class, 'getBalance']);
         Route::post('/external-api/sandbox-proxy', [ExternalApiController::class, 'sandboxProxy']);
         Route::get('/external-api/documentation', [ExternalApiController::class, 'getDocumentation']);
     });
 
     Route::post('/external-api/validate', [ExternalApiController::class, 'validateApiKey']);
+    Route::get('/external-api/balance', [ExternalApiController::class, 'getBalance']);
     Route::get('/external-api/docs', [ExternalApiController::class, 'getDocumentation']);
+
+    // External B2B AI Service Gateway Endpoints (Proxied to FastAPI Microservice)
+    Route::post('/external/projection/combined', [ExternalApiController::class, 'projectCombined']);
+    Route::post('/external/insights/current', [ExternalApiController::class, 'currentInsights']);
+    Route::post('/external/insights/future', [ExternalApiController::class, 'futureInsights']);
+    Route::get('/external/balance', [ExternalApiController::class, 'getBalance']);
+
     Route::get('/products/supplier/ai', [ProductController::class, 'supplierProductForAI']);
     Route::get('/supplier-profile/{id}', [ProductController::class, 'supplierProfileWithProducts']);
 
