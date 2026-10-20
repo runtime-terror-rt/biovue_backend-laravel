@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Traits\SendsFcmPush;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,7 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class MilestoneNotification extends Notification
 {
-    use Queueable;
+    use Queueable, SendsFcmPush;
 
     public $title;
     public $message;
@@ -24,21 +25,27 @@ class MilestoneNotification extends Notification
         $this->type = $type;
     }
 
-
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'fcm'];
+    }
+
+    public function getTargetUrl(object $notifiable): string
+    {
+        return ($notifiable->user_type === 'professional') ? '/trainer-dashboard/clients' : '/goals';
     }
 
     public function toDatabase($notifiable)
     {
+        $url = $this->getTargetUrl($notifiable);
+
         return [
-            'title' => $this->title,
-            'message' => $this->message,
-            'type' => $this->type,
-            'url' => '/goals',
-            'action_url' => '/goals',
-            'link' => '/goals',
+            'title'      => $this->title,
+            'message'    => $this->message,
+            'type'       => $this->type,
+            'url'        => $url,
+            'action_url' => $url,
+            'link'       => $url,
         ];
     }
 }

@@ -123,7 +123,14 @@ class UserProfileController extends Controller
             ? asset('storage/' . $fullUser->profile->image)
             : null;
 
-        $user->notify(new InsightNotification('AI Insight', 'New AI Insight available','insight_msg'));
+        // AI Insights are strictly for individual users who have ai_insights enabled
+        if ($user->user_type === 'individual') {
+            \App\Services\NotificationService::notifyUser(
+                $user,
+                new InsightNotification('AI Insight', 'New AI Insight available', 'insight_msg'),
+                'ai_insights'
+            );
+        }
 
 
         return response()->json([

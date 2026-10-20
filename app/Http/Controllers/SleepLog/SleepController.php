@@ -28,7 +28,17 @@ class SleepController extends Controller
 
         $user = Auth::user();
 
-        // $user->notify(new ReminderNotification('New Sleep Logs', 'Sleep Logs Added on '.$request->log_date .' ','reminder_message'));
+        // Notify connected trainers about sleep log
+        \App\Services\NotificationService::notifyConnectedTrainers(
+            $user,
+            new \App\Notifications\ClientActivityNotification(
+                "Sleep Logged: {$user->name}",
+                "{$user->name} has logged sleep details for {$validated['log_date']}.",
+                'client_activity_log',
+                ['client_id' => $user->id, 'log_date' => $validated['log_date'], 'type' => 'sleep']
+            ),
+            'program_milestone_updates'
+        );
 
         return response()->json($activity, 201);
 

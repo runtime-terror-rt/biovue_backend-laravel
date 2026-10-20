@@ -135,8 +135,25 @@ class ScheduleController extends Controller
             );
 
             $client = \App\Models\User::find($validated['client_id']);
+            $trainer = auth()->user() ?? \App\Models\User::find($schedule->trainer_id);
             $statusType = $isUpdate ? 'updated' : 'created';
-            $client->notify(new \App\Notifications\ScheduleNotification($schedule, $statusType));
+
+            if ($client) {
+                \App\Services\NotificationService::notifyUser(
+                    $client,
+                    new \App\Notifications\ScheduleNotification($schedule, $statusType),
+                    'check_in_reminder_alerts'
+                );
+            }
+
+            if ($trainer) {
+                \App\Services\NotificationService::notifyUser(
+                    $trainer,
+                    new \App\Notifications\ScheduleNotification($schedule, $statusType),
+                    'check_in_reminder_alerts'
+                );
+            }
+
             $message = $isUpdate ? 'Schedule updated successfully' : 'Check-in scheduled successfully';
 
             return response()->json([

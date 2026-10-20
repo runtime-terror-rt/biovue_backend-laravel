@@ -24,9 +24,11 @@ class UserNutritionCalculateController extends Controller
         try {
             $userId   = $request->user_id;
             $newFoods = $request->foods;
+            $userTimezone = $request->header('X-Timezone') ?? $request->input('timezone');
+            $defaultDate = $userTimezone ? now($userTimezone)->toDateString() : now()->toDateString();
             $logDate  = $request->filled('log_date') 
                 ? \Carbon\Carbon::parse($request->log_date)->toDateString() 
-                : now()->toDateString();
+                : $defaultDate;
 
             // Call AI Nutrition API (trailing slash required by FastAPI/Uvicorn to avoid 307 redirect)
             $response = Http::withoutVerifying()
@@ -76,6 +78,20 @@ class UserNutritionCalculateController extends Controller
                 'log_date'       => $logDate,
             ]);
 
+            // Notify connected trainers about client nutrition log
+            if ($clientUser = \App\Models\User::find($userId)) {
+                \App\Services\NotificationService::notifyConnectedTrainers(
+                    $clientUser,
+                    new \App\Notifications\ClientActivityNotification(
+                        "Nutrition Logged: {$clientUser->name}",
+                        "{$clientUser->name} has logged nutrition intake for {$logDate}.",
+                        'client_activity_log',
+                        ['client_id' => $clientUser->id, 'log_date' => $logDate, 'type' => 'nutrition']
+                    ),
+                    'program_milestone_updates'
+                );
+            }
+
             // Return the combined total of ALL rows for this user + date
             $aggregated = $this->aggregateForDate($userId, $logDate);
 
@@ -96,9 +112,11 @@ class UserNutritionCalculateController extends Controller
     {
         $user = $request->user(); // Logged-in user
 
+        $userTimezone = $request->header('X-Timezone') ?? $request->input('timezone');
+        $defaultDate = $userTimezone ? now($userTimezone)->toDateString() : now()->toDateString();
         $logDate = $request->filled('log_date') 
             ? \Carbon\Carbon::parse($request->log_date)->toDateString() 
-            : now()->toDateString();
+            : $defaultDate;
 
         $aggregated = $this->aggregateForDate($user->id, $logDate);
 

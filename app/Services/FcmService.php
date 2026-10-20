@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 class FcmService
 {
-    public static function send($token, $title, $body)
+    public static function send($token, $title, $body, array $data = [])
     {
         if (!$token) {
             Log::error("FCM Service: Attempted to send, but no device token provided.");
@@ -19,17 +19,31 @@ class FcmService
         try {
             Log::info("FCM Service: Sending push notification to token: {$token}");
 
-            $factory = (new Factory)->withServiceAccount(storage_path('app/firebase/firebase_credentials.json'));
+            $credentialsPath = storage_path('app/firebase/firebase_credentials.json');
+            if (!file_exists($credentialsPath)) {
+                Log::warning("FCM Service: Firebase credentials file not found at {$credentialsPath}");
+                return;
+            }
+
+            $factory = (new Factory)->withServiceAccount($credentialsPath);
             $messaging = $factory->createMessaging();
 
             $message = CloudMessage::withTarget('token', $token)
                 ->withNotification(FcmNotification::create()
-                    ->withTitle($title)
-                    ->withBody($body));
+                    ->withTitle((string)$title)
+                    ->withBody((string)$body));
+
+            if (!empty($data)) {
+                $stringData = [];
+                foreach ($data as $k => $v) {
+                    $stringData[(string)$k] = is_scalar($v) ? (string)$v : json_encode($v);
+                }
+                $message = $message->withData($stringData);
+            }
 
             $response = $messaging->send($message);
             
-            Log::info("FCM Service: Push notification sent successfully! Response: " . print_r($response, true));
+            Log::info("FCM Service: Push notification sent successfully!");
             return $response;
 
         } catch (\Exception $e) {

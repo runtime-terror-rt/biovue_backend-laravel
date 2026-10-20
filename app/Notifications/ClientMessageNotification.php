@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Traits\SendsFcmPush;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,11 +10,12 @@ use Illuminate\Notifications\Notification;
 
 class ClientMessageNotification extends Notification
 {
-    use Queueable;
+    use Queueable, SendsFcmPush;
 
     public $title;
     public $message;
     public $type;
+
     /**
      * Create a new notification instance.
      */
@@ -24,14 +26,22 @@ class ClientMessageNotification extends Notification
         $this->type = $type;
     }
 
-
     public function via(object $notifiable): array
     {
-        $channels = ['database'];
+        $channels = ['database', 'fcm'];
         if (!empty($notifiable->email)) {
             $channels[] = 'mail';
         }
         return $channels;
+    }
+
+    public function getTargetUrl(object $notifiable): string
+    {
+        return match(true) {
+            $notifiable->profession_type === 'supplement_supplier' => '/supplier-dashboard/messages',
+            $notifiable->user_type === 'professional' => '/trainer-dashboard/messages',
+            default => '/user-dashboard/messages',
+        };
     }
 
     public function toMail(object $notifiable): MailMessage

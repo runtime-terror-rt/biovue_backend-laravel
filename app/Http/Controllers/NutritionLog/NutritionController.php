@@ -60,11 +60,25 @@ class NutritionController extends Controller
         $status = $log->wasRecentlyCreated ? 201 : 200;
         $message = $log->wasRecentlyCreated ? 'Log saved successfully' : 'Log Updated successfully';
 
+        // Notify connected trainers about nutrition update
+        if ($user = Auth::user()) {
+            \App\Services\NotificationService::notifyConnectedTrainers(
+                $user,
+                new \App\Notifications\ClientActivityNotification(
+                    "Nutrition Logged: {$user->name}",
+                    "{$user->name} has logged nutrition for {$validated['log_date']}.",
+                    'client_activity_log',
+                    ['client_id' => $user->id, 'log_date' => $validated['log_date'], 'type' => 'nutrition']
+                ),
+                'program_milestone_updates'
+            );
+        }
+
         return response()->json([
             'success' => true,
             'message' => $message,
             'data'    => $log
-        ], $status);;
+        ], $status);
     }
 
     // Show a single log entry

@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Traits\SendsFcmPush;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -9,7 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class SubscriptionNotification extends Notification
 {
-    use Queueable;
+    use Queueable, SendsFcmPush;
 
     public $title;
     public $message;
@@ -24,10 +25,14 @@ class SubscriptionNotification extends Notification
         $this->type = $type;
     }
 
-
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'fcm'];
+    }
+
+    public function getTargetUrl(object $notifiable): string
+    {
+        return ($notifiable->user_type === 'admin') ? '/admin-dashboard' : '/pricing';
     }
 
     public function toDatabase($notifiable)
