@@ -2,28 +2,35 @@
 
 namespace App\Notifications;
 
+use App\Traits\SendsFcmPush;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 class ReminderNotification extends Notification
 {
-    use Queueable;
+    use Queueable, SendsFcmPush;
 
     public $title;
     public $reminder_content;
+    public $message;
     public $type;
 
     public function __construct($title, $message, $type)
     {
         $this->title = $title;
         $this->reminder_content = $message;
+        $this->message = $message;
         $this->type = $type;
     }
 
     public function via(object $notifiable): array
     {
-        return ['database', 'mail'];
+        $channels = ['database', 'fcm'];
+        if (!empty($notifiable->email)) {
+            $channels[] = 'mail';
+        }
+        return $channels;
     }
 
     public function toMail($notifiable): MailMessage

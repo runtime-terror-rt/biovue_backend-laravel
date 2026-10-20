@@ -8,10 +8,11 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Notifications\Messages\BroadcastMessage; 
 use Illuminate\Notifications\Notification;
 use App\Channels\FcmChannel;
+use App\Traits\SendsFcmPush;
 use Illuminate\Support\Facades\Log;
 class CoachMessageNotification extends Notification implements ShouldQueue, ShouldBroadcast
 {
-    use Queueable;
+    use Queueable, SendsFcmPush;
 
     public $title;
     public $message;
@@ -84,6 +85,11 @@ class CoachMessageNotification extends Notification implements ShouldQueue, Shou
         ]);
     }
 
+    public function getTargetUrl($notifiable): string
+    {
+        return $this->resolveTargetUrl($notifiable);
+    }
+
     private function resolveTargetUrl($notifiable): string
     {
         if ($this->type === 'connection_cancelled' || $this->type === 'connection_request') {
@@ -95,23 +101,5 @@ class CoachMessageNotification extends Notification implements ShouldQueue, Shou
             $notifiable->user_type === 'professional' => '/trainer-dashboard/messages',
             default => '/user-dashboard/messages',
         };
-    }
-
-    public function toFcm($notifiable)
-    {
-        Log::info('toFcm method called for user: ' . $notifiable->id); 
-
-        $device = $notifiable->devices()->latest()->first();
-        
-        if (!$device) {
-            Log::info('No device found for user: ' . $notifiable->id);
-            return;
-        }
-
-        return \App\Services\FcmService::send(
-            $device->device_token, 
-            $this->title, 
-            $this->message
-        );
     }
 }

@@ -154,22 +154,20 @@ class User extends Authenticatable
 
     public function sendUserNotify($type, $content)
     {
-        $settings = $this->notificationSettings;
-        $canSend = false;
+        $settingKey = match($type) {
+            'goal_updates'    => 'goal_updates',
+            'coach_messages'  => 'coach_messages',
+            'client_messages' => 'client_messages',
+            'missed_checkin'  => 'missed_checkin_alerts',
+            default           => $type
+        };
 
-        if (!$settings) return;
-
-        if ($type === 'goal_updates') $canSend = $settings->enable_goal_updates;
-        if ($type === 'coach_messages') $canSend = $settings->enable_coach_messages;
-        if ($type === 'missed_checkin') $canSend = $settings->enable_missed_checkin_alerts;
-
-        if ($canSend) {
-
+        if (\App\Services\NotificationService::canReceive($this, $settingKey)) {
             $this->notify(new \App\Notifications\GeneralNotification([
-                'title' => $content['title'],
-                'message' => $content['message'],
-                'type' => $type,
-                'url' => $content['url'] ?? '#'
+                'title'   => $content['title'] ?? 'Notification',
+                'message' => $content['message'] ?? '',
+                'type'    => $type,
+                'url'     => $content['url'] ?? '#'
             ]));
         }
     }

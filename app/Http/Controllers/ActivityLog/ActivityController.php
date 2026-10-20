@@ -50,7 +50,17 @@ class ActivityController extends Controller
         $status = $activity->wasRecentlyCreated ? 201 : 200;
         $message = $activity->wasRecentlyCreated ? 'Activity log created.' : 'Activity log updated.';
 
-        // $user->notify(new ReminderNotification('New Logs', 'Logs Added on '.$request->log_date .' ','reminder_message'));
+        // Notify connected trainers about client activity log
+        \App\Services\NotificationService::notifyConnectedTrainers(
+            $user,
+            new \App\Notifications\ClientActivityNotification(
+                "Activity Logged: {$user->name}",
+                "{$user->name} has logged daily activity for {$validated['log_date']}.",
+                'client_activity_log',
+                ['client_id' => $user->id, 'log_date' => $validated['log_date'], 'type' => 'activity']
+            ),
+            'program_milestone_updates'
+        );
 
         return response()->json([
             'success' => true,

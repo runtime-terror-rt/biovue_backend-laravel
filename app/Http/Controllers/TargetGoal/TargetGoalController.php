@@ -48,13 +48,13 @@ class TargetGoalController extends Controller
 
         $client = User::find($validated['user_id']);
 
-        $client->sendUserNotify('goal_updates', [
-            'title'   => 'New Goal Set',
-            'message' => 'Your coach has updated your fitness targets.',
-            'url'     => '/goals'
-        ]);
-
-        $client->notify(new GoalUpdateNotification('New Goal Set', 'Your coach has updated your fitness targets.', 'goal_message'));
+        if ($client) {
+            \App\Services\NotificationService::notifyUser(
+                $client,
+                new GoalUpdateNotification('New Goal Set', 'Your coach has updated your fitness targets.', 'goal_message'),
+                'goal_updates'
+            );
+        }
 
         return response()->json([
             'success' => true,
@@ -168,8 +168,6 @@ class TargetGoalController extends Controller
                 ->exists();
         }
 
-        $loggedInUser->notify(new MilestoneNotification('New Milestone', 'Your target Is Complete','milestone_message'));
-
         if ($isOwner || $isConnectedTrainer) {
 
             $validated = $request->validate([
@@ -183,6 +181,32 @@ class TargetGoalController extends Controller
             ]);
 
             $goal->update($validated);
+
+            // If client updated their own goal, notify connected trainers
+            if ($isOwner) {
+                \App\Services\NotificationService::notifyConnectedTrainers(
+                    $loggedInUser,
+                    new MilestoneNotification(
+                        'Goal Updated',
+                        "{$loggedInUser->name} has updated their fitness goal.",
+                        'goal_updates'
+                    ),
+                    'goal_updates'
+                );
+            } elseif ($isConnectedTrainer) {
+                // If coach updated client's goal, notify the client
+                if ($client = \App\Models\User::find($goal->user_id)) {
+                    \App\Services\NotificationService::notifyUser(
+                        $client,
+                        new GoalUpdateNotification(
+                            'Goal Updated',
+                            'Your coach has updated your fitness targets.',
+                            'goal_message'
+                        ),
+                        'goal_updates'
+                    );
+                }
+            }
 
             return response()->json([
                 'success' => true,

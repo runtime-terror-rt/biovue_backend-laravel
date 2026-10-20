@@ -15,6 +15,7 @@ class NotificationController extends Controller
 
         $validated = $request->validate([
             'coach_messages' => 'boolean',
+            'client_messages' => 'boolean',
             'goal_updates' => 'boolean',
             'ai_insights' => 'boolean',
             'missed_checkin_alerts' => 'boolean',
@@ -43,6 +44,11 @@ class NotificationController extends Controller
         $user = Auth::user();
 
         $settings = $user->notificationSettings;
+        if (!$settings) {
+            $defaults = \App\Services\NotificationService::getDefaultsForUser($user);
+            $defaults['user_id'] = $user->id;
+            $settings = \App\Models\UserNotificationSetting::create($defaults);
+        }
 
         return response()->json([
             'status' => 'success',
@@ -153,6 +159,16 @@ class NotificationController extends Controller
                 return '/admin-dashboard/users';
             }
 
+            // Fix legacy '/pricing' for professionals
+            if (str_contains($rawUrl, 'pricing') && $userType === 'professional') {
+                return $isSupplier ? '/supplier-dashboard' : '/trainer-dashboard/overview';
+            }
+
+            // Fix legacy '/goals' for professionals
+            if (str_contains($rawUrl, 'goals') && $userType === 'professional') {
+                return '/trainer-dashboard/clients';
+            }
+
             // If it's already a valid specific URL (e.g. program query, etc.)
             return $rawUrl;
         }
@@ -165,10 +181,10 @@ class NotificationController extends Controller
                 default => '/user-dashboard/messages',
             },
             'program_assigned' => !empty($data['program_id']) ? '/user-programs?program_id=' . $data['program_id'] : '/user-programs',
-            'goal_updates', 'goal_message' => '/goals',
-            'milestone_message' => '/goals',
+            'goal_updates', 'goal_message', 'milestone_message' => ($userType === 'professional') ? '/trainer-dashboard/clients' : '/goals',
             'insight_msg' => '/insights',
             'schedule_created', 'schedule_updated', 'schedule_reminder', 'reminder_message' => ($userType === 'professional') ? '/trainer-dashboard/calendar' : '/calendar',
+            'client_activity_log', 'habit_logged' => ($userType === 'professional') ? '/trainer-dashboard/clients' : '/user-dashboard',
             'connection_cancelled', 'connection_request' => match(true) {
                 $isSupplier => '/supplier-dashboard',
                 $userType === 'professional' => '/trainer-dashboard/clients',
@@ -176,7 +192,12 @@ class NotificationController extends Controller
             },
             'supplement_match', 'find_match' => '/supplier-dashboard',
             'product_order', 'product_update' => '/products/supplier',
-            'subscription_message', 'subscription_updates' => $isAdmin ? '/admin-dashboard' : '/pricing',
+            'subscription_message', 'subscription_updates', 'subscription_alert' => match(true) {
+                $isAdmin => '/admin-dashboard',
+                $isSupplier => '/supplier-dashboard',
+                $userType === 'professional' => '/trainer-dashboard/overview',
+                default => '/pricing',
+            },
             'registration_message' => '/admin-dashboard/users',
             default => $this->fallbackUrlByTypeOrClass($notification, $data, $currentUser),
         };
@@ -206,10 +227,15 @@ class NotificationController extends Controller
                 $userType === 'professional' => '/trainer-dashboard/messages',
                 default => '/user-dashboard/messages',
             },
-            'GoalUpdateNotification', 'MilestoneNotification' => '/goals',
+            'GoalUpdateNotification', 'MilestoneNotification' => ($userType === 'professional') ? '/trainer-dashboard/clients' : '/goals',
             'InsightNotification' => '/insights',
             'ReminderNotification' => ($userType === 'professional') ? '/trainer-dashboard/calendar' : '/calendar',
-            'SubscriptionNotification' => $isAdmin ? '/admin-dashboard' : '/pricing',
+            'SubscriptionNotification' => match(true) {
+                $isAdmin => '/admin-dashboard',
+                $isSupplier => '/supplier-dashboard',
+                $userType === 'professional' => '/trainer-dashboard/overview',
+                default => '/pricing',
+            },
             'AdminNotification' => $isAdmin ? '/admin-dashboard' : '/user-dashboard',
             default => match(true) {
                 $isAdmin => '/admin-dashboard',

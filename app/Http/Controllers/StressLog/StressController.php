@@ -50,7 +50,17 @@ class StressController extends Controller
 
         $user = Auth::user();
 
-        // $user->notify(new ReminderNotification('New Stress Logs', 'Stress Logs Added on '.$request->log_date .' ','reminder_message'));
+        // Notify connected trainers about stress log
+        \App\Services\NotificationService::notifyConnectedTrainers(
+            $user,
+            new \App\Notifications\ClientActivityNotification(
+                "Stress Logged: {$user->name}",
+                "{$user->name} has logged stress levels for {$cleanDate}.",
+                'client_activity_log',
+                ['client_id' => $user->id, 'log_date' => $cleanDate, 'type' => 'stress']
+            ),
+            'program_milestone_updates'
+        );
 
         return response()->json([
             'success' => true,
