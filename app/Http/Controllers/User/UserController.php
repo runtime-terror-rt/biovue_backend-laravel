@@ -621,6 +621,63 @@ class UserController extends Controller
         $nutritionCount = $nutritionLogs->count();
         $nutritionScore = min(($nutritionCount / $days) * 100, 100);
 
+        // Generate daily status for consistency bars and unique logged days
+        $periodDates = [];
+        for ($i = $days - 1; $i >= 0; $i--) {
+            $periodDates[] = now()->subDays($i);
+        }
+
+        $buildDayList = function($isLoggedCallback) use ($periodDates) {
+            $list = [];
+            foreach ($periodDates as $d) {
+                $dStr = $d->toDateString();
+                $isLogged = (bool) $isLoggedCallback($dStr);
+                $list[] = [
+                    'date'      => $dStr,
+                    'day'       => $d->format('D'),
+                    'is_logged' => $isLogged,
+                    'active'    => $isLogged,
+                ];
+            }
+            return $list;
+        };
+
+        $sleepDays = $buildDayList(function($dStr) use ($sleepLogs, $activityLogs) {
+            $slp = $sleepLogs->firstWhere('log_date', $dStr);
+            if ($slp && (float)($slp->sleep_hours ?? 0) > 0) return true;
+            $act = $activityLogs->firstWhere('log_date', $dStr);
+            return $act && (float)($act->sleep_hours ?? 0) > 0;
+        });
+
+        $activityDays = $buildDayList(function($dStr) use ($activityLogs) {
+            $act = $activityLogs->firstWhere('log_date', $dStr);
+            return $act && (int)($act->daily_steps ?? 0) > 0;
+        });
+
+        $hydrationDays = $buildDayList(function($dStr) use ($hydrationLogs, $activityLogs) {
+            $hyd = $hydrationLogs->firstWhere('log_date', $dStr);
+            if ($hyd && ((float)($hyd->water_glasses ?? 0) > 0 || (float)($hyd->water_oz ?? 0) > 0)) return true;
+            $act = $activityLogs->firstWhere('log_date', $dStr);
+            return $act && (float)($act->water_glasses ?? 0) > 0;
+        });
+
+        $nutritionDays = $buildDayList(function($dStr) use ($nutritionLogs) {
+            return $nutritionLogs->contains(function($item) use ($dStr) {
+                $itemDate = !empty($item->log_date)
+                    ? date('Y-m-d', strtotime($item->log_date))
+                    : (isset($item->created_at) ? date('Y-m-d', strtotime($item->created_at)) : null);
+                return $itemDate === $dStr;
+            });
+        });
+
+        $stressDays = $buildDayList(function($dStr) use ($stressLogs) {
+            $str = $stressLogs->firstWhere('log_date', $dStr);
+            return $str !== null && isset($str->stress_level);
+        });
+
+        $hydrationAvg = ($unit === 'imperial') ? $avgHydrationOz : $avgHydrationGlasses;
+        $hydrationSuffix = ($unit === 'imperial') ? "Ounces avg" : "glasses avg";
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -686,26 +743,48 @@ class UserController extends Controller
                 ],
 
                 'consistency_metrics' => [
-                    $this->formatMetric("Sleep", $avgSleep, "hrs avg", $sleepLogs->isNotEmpty() ? $sleepLogs->count() : $activityLogs->whereNotNull('sleep_hours')->count(), $days),
-                    $this->formatMetric("Activity", $activityLogs->avg('daily_steps'), "steps avg", $activityLogs->count(), $days, true),
-                    $this->formatMetric("Hydration", $avgHydrationGlasses, "glasses avg", $hydrationLogs->count(), $days),
-                    $this->formatMetric("Nutrition", $nutritionCount, "entries total", $nutritionCount, $days),
-                    $this->formatMetric("Stress", $stressLogs->avg('stress_level'), "/10 level", $stressLogs->count(), $days)
+                    $this->formatMetric("Sleep", $avgSleep, "hrs avg", $sleepDays, $days),
+                    $this->formatMetric("Activity", $activityLogs->avg('daily_steps'), "steps avg", $activityDays, $days, true),
+                    $this->formatMetric("Hydration", $hydrationAvg, $hydrationSuffix, $hydrationDays, $days),
+                    $this->formatMetric("Nutrition", $nutritionCount, "entries total", $nutritionDays, $days),
+                    $this->formatMetric("Stress", $stressLogs->avg('stress_level'), "/10 level", $stressDays, $days)
                 ]
             ]
         ]);
     }
 
-    /** * Helper for Consistency Metrics formatting 
+    /** 
+     * Helper for Consistency Metrics formatting 
      */
-    private function formatMetric($title, $avg, $suffix, $count, $days, $isSteps = false) 
+    private function formatMetric($title, $avg, $suffix, $dayListOrCount, $days, $isSteps = false) 
     {
+        if (is_array($dayListOrCount)) {
+            $dayList = $dayListOrCount;
+            $uniqueCount = count(array_filter(array_column($dayList, 'is_logged')));
+            $bars = array_map(fn($d) => (bool)$d['is_logged'], $dayList);
+        } else {
+            $uniqueCount = min((int)$dayListOrCount, $days);
+            $bars = array_fill(0, $days, false);
+            for ($i = 0; $i < $uniqueCount; $i++) {
+                $bars[$i] = true;
+            }
+            $dayList = [];
+        }
+
         $val = $isSteps ? number_format($avg ?? 0) : round($avg ?? 0, 1);
+
         return [
-            'title' => $title,
-            'avg' => "$val $suffix",
-            'status' => $count >= ($days * 0.6) ? "ON TRACK" : "Need Attention",
-            'ratio' => "$count/$days Days"
+            'title'       => $title,
+            'avg'         => "$val $suffix",
+            'status'      => $uniqueCount >= ($days * 0.6) ? "ON TRACK" : "Need Attention",
+            'ratio'       => "$uniqueCount/$days Days",
+            'logged_days' => $uniqueCount,
+            'total_days'  => $days,
+            'percentage'  => $days > 0 ? round(($uniqueCount / $days) * 100) : 0,
+            'bars'        => $bars,
+            'weekly_bars' => $bars,
+            'history'     => $bars,
+            'days'        => $dayList
         ];
     }
 
