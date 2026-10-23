@@ -9,6 +9,31 @@ use App\Models\AI\UserNutritionCalculate;
 
 class UserNutritionCalculateController extends Controller
 {
+    private function resolveLogDate(Request $request): string
+    {
+        if ($request->filled('log_date')) {
+            return \Carbon\Carbon::parse($request->input('log_date'))->toDateString();
+        }
+
+        if ($request->filled('date')) {
+            return \Carbon\Carbon::parse($request->input('date'))->toDateString();
+        }
+
+        $userTimezone = $request->header('X-Timezone') 
+            ?? $request->input('timezone') 
+            ?? $request->header('Timezone');
+
+        if ($userTimezone) {
+            try {
+                return now($userTimezone)->toDateString();
+            } catch (\Throwable $e) {
+                // Fallback to default server date if timezone identifier is invalid
+            }
+        }
+
+        return now()->toDateString();
+    }
+
     /**
      * Store nutrition calculation for a user.
      * Always inserts a new row, then returns the AGGREGATED total
@@ -24,11 +49,7 @@ class UserNutritionCalculateController extends Controller
         try {
             $userId   = $request->user_id;
             $newFoods = $request->foods;
-            $userTimezone = $request->header('X-Timezone') ?? $request->input('timezone');
-            $defaultDate = $userTimezone ? now($userTimezone)->toDateString() : now()->toDateString();
-            $logDate  = $request->filled('log_date') 
-                ? \Carbon\Carbon::parse($request->log_date)->toDateString() 
-                : $defaultDate;
+            $logDate  = $this->resolveLogDate($request);
 
             // Call AI Nutrition API (trailing slash required by FastAPI/Uvicorn to avoid 307 redirect)
             $response = Http::withoutVerifying()
@@ -111,12 +132,7 @@ class UserNutritionCalculateController extends Controller
     public function show(Request $request)
     {
         $user = $request->user(); // Logged-in user
-
-        $userTimezone = $request->header('X-Timezone') ?? $request->input('timezone');
-        $defaultDate = $userTimezone ? now($userTimezone)->toDateString() : now()->toDateString();
-        $logDate = $request->filled('log_date') 
-            ? \Carbon\Carbon::parse($request->log_date)->toDateString() 
-            : $defaultDate;
+        $logDate = $this->resolveLogDate($request);
 
         $aggregated = $this->aggregateForDate($user->id, $logDate);
 
@@ -137,19 +153,21 @@ class UserNutritionCalculateController extends Controller
         $request->validate([
             'food' => 'required|string',
             'log_date' => 'nullable|date',
+            'date' => 'nullable|date',
             'user_id' => 'nullable|exists:users,id',
         ]);
 
         $userId = $request->user_id ?? auth()->id();
-        $logDate = $request->filled('log_date') 
-            ? \Carbon\Carbon::parse($request->log_date)->toDateString() 
-            : now()->toDateString();
+        $logDate = $this->resolveLogDate($request);
         $foodToRemove = trim($request->food);
 
         $records = UserNutritionCalculate::where('user_id', $userId)
             ->where(function($q) use ($logDate) {
                 $q->whereDate('log_date', $logDate)
-                  ->orWhereDate('created_at', $logDate);
+                  ->orWhere(function ($sub) use ($logDate) {
+                      $sub->whereNull('log_date')
+                          ->whereDate('created_at', $logDate);
+                  });
             })
             ->get();
 
@@ -240,7 +258,13 @@ class UserNutritionCalculateController extends Controller
         $normalizedDate = \Carbon\Carbon::parse($logDate)->toDateString();
 
         $nutritions = UserNutritionCalculate::where('user_id', $userId)
-            ->whereDate('log_date', $normalizedDate)
+            ->where(function ($q) use ($normalizedDate) {
+                $q->whereDate('log_date', $normalizedDate)
+                  ->orWhere(function ($sub) use ($normalizedDate) {
+                      $sub->whereNull('log_date')
+                          ->whereDate('created_at', $normalizedDate);
+                  });
+            })
             ->get();
 
         if ($nutritions->isEmpty()) {

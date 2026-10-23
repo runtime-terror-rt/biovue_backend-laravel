@@ -1318,18 +1318,21 @@ class UserController extends Controller
                 $hydLog = $hydration->where('log_date', $formattedDate)->first();
                 $strLog = $stress->where('log_date', $formattedDate)->first();
                 
-                $nutLog = $nutrition->filter(function($item) use ($formattedDate) {
+                $dayNutritions = $nutrition->filter(function($item) use ($formattedDate) {
                     $itemDate = isset($item->log_date) ? date('Y-m-d', strtotime($item->log_date)) : date('Y-m-d', strtotime($item->created_at));
                     return $itemDate == $formattedDate;
-                })->first();
+                });
 
                 $rawHydrationGlasses = $hydLog ? (float)$hydLog->water_glasses : 0;
                 if ($rawHydrationGlasses > 30) {
                     $rawHydrationGlasses = round($rawHydrationGlasses / 8, 1);
                 }
 
-                $dayCal = $nutLog ? (float)$nutLog->calories_value : 0;
-                $adherence = $targetCal > 0 && $nutLog ? round(($dayCal / $targetCal) * 100) : 0;
+                $dayProtein = (float) $dayNutritions->sum('protein_value');
+                $dayCarbs   = (float) $dayNutritions->sum('carbs_value');
+                $dayFats    = (float) $dayNutritions->sum('fat_value');
+                $dayCal     = (float) $dayNutritions->sum('calories_value');
+                $adherence  = $targetCal > 0 && $dayNutritions->isNotEmpty() ? round(($dayCal / $targetCal) * 100) : 0;
 
                 $chartData[] = [
                     'label' => $date->format('D'), 
@@ -1339,10 +1342,10 @@ class UserController extends Controller
                     'hydration' => $rawHydrationGlasses,
                     'stress' => $strLog ? (float)$strLog->stress_level : 0,
                     'nutrition' => [
-                        'protein' => $nutLog ? (float)$nutLog->protein_value : 0,
-                        'carbs'   => $nutLog ? (float)$nutLog->carbs_value : 0,
-                        'fats'    => $nutLog ? (float)$nutLog->fat_value : 0,
-                        'calories' => $dayCal,
+                        'protein' => round($dayProtein, 2),
+                        'carbs'   => round($dayCarbs, 2),
+                        'fats'    => round($dayFats, 2),
+                        'calories' => round($dayCal),
                         'calorie_percentage' => $adherence,
                         'adherence_pct' => $adherence,
                     ]
@@ -1368,6 +1371,13 @@ class UserController extends Controller
             $projectionsCount = DB::table('projection_data')->where('user_id', $targetId)->count()
                 ?: DB::table('projections')->where('user_id', $targetId)->count();
 
+            $groupedNutritionByDay = $nutrition->groupBy(function($item) {
+                return isset($item->log_date) ? date('Y-m-d', strtotime($item->log_date)) : date('Y-m-d', strtotime($item->created_at));
+            });
+            $avgDailyCalories = $groupedNutritionByDay->isNotEmpty()
+                ? round($groupedNutritionByDay->map(fn($day) => $day->sum('calories_value'))->avg())
+                : 0;
+
             return response()->json([
                 'success' => true,
                 'client_name' => $userData->name,
@@ -1392,7 +1402,7 @@ class UserController extends Controller
                         'target_glasses'    => $targetGoal->water_target ?? 8
                     ],
                     'nutrition' => [
-                        'avg_calories' => round($nutrition->avg('calories_value') ?? 0),
+                        'avg_calories' => $avgDailyCalories,
                         'total_logs'   => $nutrition->count()
                     ],
                     'projections_used' => [

@@ -125,46 +125,123 @@ class NutritionController extends Controller
 
     public function getNutritionReport(Request $request)
     {
-        $userId = auth()->id();
+        $userId = $request->query('user_id') ?: ($request->query('client_id') ?: auth()->id());
         $type = $request->query('type', 'weekly');
 
         $endDate   = Carbon::today();
         $startDate = $this->getStartDate($type);
 
-        // Same grouping idea as aggregateForDate() in store()/show() —
-        // but grouped per day across the whole range instead of a single date
         $groupedLogs = UserNutritionCalculate::where('user_id', $userId)
-            ->whereBetween('log_date', [$startDate, $endDate])
+            ->where(function($q) use ($startDate, $endDate) {
+                $q->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
+                  ->orWhereBetween('created_at', [$startDate->toDateString() . ' 00:00:00', $endDate->toDateString() . ' 23:59:59']);
+            })
             ->get()
-            ->groupBy(fn($item) => Carbon::parse($item->log_date)->format('Y-m-d'));
+            ->groupBy(function($item) {
+                return !empty($item->log_date) 
+                    ? Carbon::parse($item->log_date)->format('Y-m-d') 
+                    : Carbon::parse($item->created_at)->format('Y-m-d');
+            });
 
-        $targetGoal = \App\Models\TargetGoal::where('user_id', $userId)->where('is_active', true)->first();
-        $targetCalories = (float)($targetGoal->target_calories ?? 2000);
+        $adjustProgram = \App\Models\AdjustProgram::where('user_id', $userId)->first();
+        $targetGoal    = \App\Models\TargetGoal::where('user_id', $userId)->where('is_active', true)->first();
+
+        $targetCalories = (float)(
+            $adjustProgram->calories 
+            ?? $targetGoal->target_calories 
+            ?? 2000
+        );
+        $targetProtein = (float)($adjustProgram->protein ?? ($targetGoal->protein_target ?? 0));
+        $targetCarbs   = (float)($adjustProgram->carbs ?? ($targetGoal->carbs_target ?? 0));
+        $targetFat     = (float)($adjustProgram->fat ?? ($targetGoal->fat_target ?? 0));
 
         $chartData = $this->generateNutritionChart($type, $startDate, $endDate, $groupedLogs, $targetCalories);
 
         $daysWithData = $groupedLogs->count();
         $totalDays    = $startDate->diffInDays($endDate) + 1;
-        $totalEntries = UserNutritionCalculate::where('user_id', $userId)->count();
+        $totalEntries = $groupedLogs->flatten()->count();
 
         $avgCalories = $this->getAverageCalories($groupedLogs);
 
-        $bestStreak = $this->calculateBestStreak($groupedLogs, $startDate, $endDate);
+        $bestStreak = $this->calculateStreak($userId);
 
         $currentTrend = $this->calculateTrend($groupedLogs, $startDate, $endDate);
+
+        $totalProtein = round($groupedLogs->flatten()->sum('protein_value'), 1);
+        $totalCarbs   = round($groupedLogs->flatten()->sum('carbs_value'), 1);
+        $totalFat     = round($groupedLogs->flatten()->sum('fat_value'), 1);
+
+        // Current day calorie intake total box (over / under calculation)
+        $todayDateStr  = Carbon::today()->format('Y-m-d');
+        $todayLogs     = $groupedLogs->get($todayDateStr);
+        $todayCalories = $todayLogs ? (float)$todayLogs->sum('calories_value') : 0.0;
+        $diff          = $todayCalories - $targetCalories;
+        $absDiff       = abs($diff);
+        $diffPct       = $targetCalories > 0 ? round(($absDiff / $targetCalories) * 100) : 0;
+        $intakePct     = $targetCalories > 0 ? round(($todayCalories / $targetCalories) * 100) : 0;
+
+        $status = ($todayCalories == 0)
+            ? 'no_data'
+            : ($diff > 0 ? 'over' : ($diff < 0 ? 'under' : 'on_track'));
+
+        $label = match($status) {
+            'over'     => '+' . round($absDiff) . ' kcal over target',
+            'under'    => '-' . round($absDiff) . ' kcal under target',
+            'on_track' => 'On target',
+            default    => '0 kcal logged today',
+        };
+
+        $currentDayCalorieBox = [
+            'date'            => $todayDateStr,
+            'intake_calories' => round($todayCalories),
+            'target_calories' => round($targetCalories),
+            'difference'      => round($diff),
+            'abs_difference'  => round($absDiff),
+            'status'          => $status,
+            'is_over'         => $diff > 0,
+            'is_under'        => $diff < 0,
+            'percentage'      => $intakePct,
+            'diff_percentage' => $diffPct,
+            'label'           => $label,
+            'badge'           => ($diff >= 0 ? '+' : '-') . $diffPct . '% ' . ($diff >= 0 ? 'over' : 'under'),
+        ];
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'filter_applied' => $type,
-                'chart_data' => $chartData,
+                'filter_applied'          => $type,
+                'chart_data'              => $chartData,
+                'current_day_calorie_box' => $currentDayCalorieBox,
+                'target_macros'           => [
+                    'calories'       => round($targetCalories),
+                    'protein'        => round($targetProtein),
+                    'carbs'          => round($targetCarbs),
+                    'fat'            => round($targetFat),
+                    'protein_target' => $targetProtein > 0 ? ($targetProtein . "g") : null,
+                    'carbs_target'   => $targetCarbs > 0 ? ($targetCarbs . "g") : null,
+                    'fat_target'     => $targetFat > 0 ? ($targetFat . "g") : null,
+                ],
+                'macro_totals' => [
+                    'protein'       => $totalProtein . "g",
+                    'carbs'         => $totalCarbs . "g",
+                    'fat'           => $totalFat . "g",
+                    'protein_value' => $totalProtein,
+                    'carbs_value'   => $totalCarbs,
+                    'fat_value'     => $totalFat,
+                ],
                 'statistics' => [
                     'average'           => $avgCalories . " kcal",
                     'target_calories'   => $targetCalories . " kcal",
+                    'target_protein'    => $targetProtein > 0 ? ($targetProtein . "g") : null,
+                    'target_carbs'      => $targetCarbs > 0 ? ($targetCarbs . "g") : null,
+                    'target_fat'        => $targetFat > 0 ? ($targetFat . "g") : null,
                     'consistency'       => round(($daysWithData / $totalDays) * 100) . "%",
                     'best_streak'       => $bestStreak . " DAYS",
                     'current_trend'     => $currentTrend,
                     'total_entries'     => $totalEntries,
+                    'total_protein'     => $totalProtein . "g",
+                    'total_carbs'       => $totalCarbs . "g",
+                    'total_fat'         => $totalFat . "g",
                 ],
                 'bio_insight' => "Your nutrition quality is balanced. Maintaining high protein servings helps in physical recovery markers."
             ]
@@ -221,9 +298,9 @@ class NutritionController extends Controller
                 $totalMacros = $proteinValue + $carbsValue + $fatValue;
 
                 if ($totalMacros > 0) {
-                    $proteinPct = round(($proteinValue / $totalMacros) * 100);
-                    $carbsPct   = round(($carbsValue / $totalMacros) * 100);
-                    $fatsPct    = 100 - ($proteinPct + $carbsPct);
+                    $proteinPct = round(($proteinValue / $totalMacros) * 100, 1);
+                    $carbsPct   = round(($carbsValue / $totalMacros) * 100, 1);
+                    $fatsPct    = round(($fatValue / $totalMacros) * 100, 1);
                 } else {
                     $proteinPct = $carbsPct = $fatsPct = 0;
                 }
@@ -236,9 +313,21 @@ class NutritionController extends Controller
                     'calories'           => round($dayCalories),
                     'calorie_percentage' => $adherencePct,
                     'adherence_pct'      => $adherencePct,
-                    'protein'            => $proteinPct,
-                    'carbs'              => $carbsPct,
-                    'fats'               => $fatsPct,
+                    // Values in grams
+                    'protein'            => round($proteinValue, 2),
+                    'carbs'              => round($carbsValue, 2),
+                    'fats'               => round($fatValue, 2),
+                    'fat'                => round($fatValue, 2),
+                    'protein_g'          => round($proteinValue, 2),
+                    'carbs_g'            => round($carbsValue, 2),
+                    'fats_g'             => round($fatValue, 2),
+                    // Percentages
+                    'protein_pct'        => $proteinPct,
+                    'carbs_pct'          => $carbsPct,
+                    'fats_pct'           => $fatsPct,
+                    'protein_percentage' => $proteinPct,
+                    'carbs_percentage'   => $carbsPct,
+                    'fats_percentage'    => $fatsPct,
                 ];
             } else {
                 $data[] = [
@@ -250,31 +339,46 @@ class NutritionController extends Controller
                     'protein'            => 0,
                     'carbs'              => 0,
                     'fats'               => 0,
+                    'fat'                => 0,
+                    'protein_g'          => 0,
+                    'carbs_g'            => 0,
+                    'fats_g'             => 0,
+                    'protein_pct'        => 0,
+                    'carbs_pct'          => 0,
+                    'fats_pct'           => 0,
+                    'protein_percentage' => 0,
+                    'carbs_percentage'   => 0,
+                    'fats_percentage'    => 0,
                 ];
             }
         }
         return $data;
     }
 
-    private function calculateBestStreak($groupedLogs, $startDate, $endDate)
+    private function calculateStreak($userId)
     {
-        $currentStreak = 0;
-        $bestStreak    = 0;
+        $dates = UserNutritionCalculate::where('user_id', $userId)
+            ->whereNotNull('log_date')
+            ->orderBy('log_date', 'desc')
+            ->pluck('log_date')
+            ->map(fn($d) => Carbon::parse($d)->toDateString())
+            ->unique();
 
-        for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
-            $dateString = $date->format('Y-m-d');
+        if ($dates->isEmpty()) return 0;
 
-            if ($groupedLogs->has($dateString)) {
-                $currentStreak++;
-                if ($currentStreak > $bestStreak) {
-                    $bestStreak = $currentStreak;
-                }
+        $streak = 0;
+        $currentDate = Carbon::today();
+
+        foreach ($dates as $logDate) {
+            $date = Carbon::parse($logDate);
+            if ($date->isSameDay($currentDate) || $date->isSameDay($currentDate->copy()->subDay())) {
+                $streak++;
+                $currentDate = $date->copy()->subDay();
             } else {
-                $currentStreak = 0;
+                break;
             }
         }
-
-        return $bestStreak;
+        return $streak;
     }
 
     /**
@@ -313,13 +417,13 @@ class NutritionController extends Controller
         $firstHalfAvg  = $firstHalfDays > 0 ? $firstHalfTotal / $firstHalfDays : 0;
         $secondHalfAvg = $secondHalfDays > 0 ? $secondHalfTotal / $secondHalfDays : 0;
 
-        if ($secondHalfAvg > $firstHalfAvg) {
-            return "Improving";
-        } elseif ($secondHalfAvg < $firstHalfAvg) {
-            return "Declining";
+        $diffPct = $firstHalfAvg > 0 ? (($secondHalfAvg - $firstHalfAvg) / $firstHalfAvg) * 100 : 0;
+
+        if (abs($diffPct) <= 5) {
+            return "Stable";
         }
 
-        return "Stable";
+        return $secondHalfAvg > $firstHalfAvg ? "Improving" : "Declining";
     }
 
     private function getAverageHydration($userId, $startDate, $endDate) 
