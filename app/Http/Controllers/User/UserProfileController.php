@@ -152,7 +152,12 @@ class UserProfileController extends Controller
 
     public function showByUserId($userId)
     {
-        $user = User::with('profile', 'medicalHistory')->findOrFail($userId);
+        $user = User::with([
+            'profile', 
+            'medicalHistory', 
+            'targetGoals' => function($q) { $q->where('is_active', true); }, 
+            'adjustProgram'
+        ])->findOrFail($userId);
 
         // If user has an unpaid trial session with Stripe, attempt auto-sync
         if (!$user->trial_ends_at && !$user->plan_id) {
@@ -200,6 +205,19 @@ class UserProfileController extends Controller
         $projectionCredits = ProjectionCredit::where('user_id', $userId)->first();
 
         $user->projection_limit = $projectionCredits ? $projectionCredits->projection_limit : 0;
+
+        // Current weight: resolve latest logged weight from activity logs
+        $latestLoggedWeight = \App\Models\ActivityLog::where('user_id', $userId)
+            ->whereNotNull('weight')
+            ->where('weight', '>', 0)
+            ->orderByRaw('COALESCE(log_date, created_at) DESC')
+            ->value('weight');
+
+        $user->current_weight = $latestLoggedWeight ?: ($user->profile->weight ?? null);
+        $user->initial_profile_weight = $user->profile->weight ?? null;
+        if ($user->profile) {
+            $user->profile->current_logged_weight = $latestLoggedWeight;
+        }
 
         return response()->json([
             'success' => true,

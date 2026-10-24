@@ -69,4 +69,55 @@ class AdjustProgramController extends Controller
             'data' => $program
         ]);
     }
+
+    public function setClientMacros(Request $request, $id = null)
+    {
+        $authUser = Auth::user();
+
+        if ($authUser->user_type !== 'professional' && $authUser->user_type !== 'admin') {
+            return response()->json(['message' => 'Unauthorized. Only professionals can set client macros.'], 403);
+        }
+
+        $userId = $id ?: $request->input('user_id');
+
+        if (!$userId || !\App\Models\User::where('id', $userId)->exists()) {
+            return response()->json(['message' => 'A valid client user_id is required.'], 422);
+        }
+
+        $validated = $request->validate([
+            'calories' => 'nullable|integer|min:0',
+            'protein'  => 'nullable|integer|min:0',
+            'carbs'    => 'nullable|integer|min:0',
+            'fat'      => 'nullable|integer|min:0',
+            'note'     => 'nullable|string',
+        ]);
+
+        $program = AdjustProgram::updateOrCreate(
+            ['user_id' => $userId],
+            array_filter($validated, fn($val) => !is_null($val))
+        );
+
+        $client = \App\Models\User::find($userId);
+        if ($client) {
+            $client->sendUserNotify('goal_updates', [
+                'title'   => 'Nutrition Macros Updated',
+                'message' => 'Your coach has updated your daily macro targets.',
+                'url'     => '/nutrition-details'
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Client macros updated successfully.',
+            'data'    => [
+                'user_id'  => (int)$userId,
+                'calories' => $program->calories,
+                'protein'  => $program->protein,
+                'carbs'    => $program->carbs,
+                'fat'      => $program->fat,
+                'note'     => $program->note,
+            ]
+        ], 200);
+    }
 }
+

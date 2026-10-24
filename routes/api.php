@@ -256,6 +256,8 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/adjust-program', [AdjustProgramController::class, 'storeOrUpdate']);
         Route::get('/adjust-program/{id}', [AdjustProgramController::class, 'show']);
+        Route::post('/client-macros', [AdjustProgramController::class, 'setClientMacros']);
+        Route::post('/clients/{id}/macros', [AdjustProgramController::class, 'setClientMacros']);
 
         Route::post('ads', [AdsController::class, 'storeOrUpdate']);
         Route::delete('ads/{id}', [AdsController::class, 'destroy']);

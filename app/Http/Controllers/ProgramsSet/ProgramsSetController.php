@@ -35,8 +35,23 @@ class ProgramsSetController extends Controller
     /**
      * Store program
      */
+    private function normalizeWorkoutTypes(Request $request)
+    {
+        if ($request->has('workout_types') && is_string($request->workout_types)) {
+            $decoded = json_decode($request->workout_types, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $request->merge(['workout_types' => $decoded]);
+            } else {
+                $types = array_values(array_filter(array_map('trim', explode(',', $request->workout_types))));
+                $request->merge(['workout_types' => $types]);
+            }
+        }
+    }
+
     public function store(Request $request)
     {
+        $this->normalizeWorkoutTypes($request);
+
         $request->validate([
             'name' => 'required|string|max:255',
             'duration' => 'nullable|integer',
@@ -122,6 +137,8 @@ class ProgramsSetController extends Controller
      */
     public function update(Request $request, $id)
     {
+        $this->normalizeWorkoutTypes($request);
+
         $request->validate([
             'name' => 'nullable|string|max:255',
             'duration' => 'nullable|integer',
@@ -307,10 +324,18 @@ public function assignUsers(Request $request)
                 ->where('connect_to_professions.user_id', $targetUserId)
                 ->join('programs_sets', 'connect_to_professions.program_set_id', '=', 'programs_sets.id')
                 ->select(
+                    'programs_sets.id as program_id',
                     'programs_sets.name as program_name',
                     'programs_sets.duration',
                     'programs_sets.primary_goal',
-                    'programs_sets.target_intensity as intensity'
+                    'programs_sets.target_intensity as intensity',
+                    'programs_sets.description',
+                    'programs_sets.notes',
+                    'programs_sets.workout_types',
+                    'programs_sets.calories',
+                    'programs_sets.protein',
+                    'programs_sets.carbs',
+                    'programs_sets.fat'
                 )
                 ->latest('connect_to_professions.created_at')
                 ->first();
@@ -322,13 +347,43 @@ public function assignUsers(Request $request)
                 ], 404);
             }
 
+            $adjustProgram = \App\Models\AdjustProgram::where('user_id', $targetUserId)->first();
+            $targetGoal = \App\Models\TargetGoal::where('user_id', $targetUserId)->where('is_active', true)->first();
+            $trainerNotes = \DB::table('profession_notes')
+                ->where('user_id', $targetUserId)
+                ->select('id', 'note', 'created_at')
+                ->latest()
+                ->take(5)
+                ->get();
+
+            $workoutTypes = !empty($programData->workout_types) 
+                ? (is_array($programData->workout_types) ? $programData->workout_types : json_decode($programData->workout_types, true)) 
+                : [];
+
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'program_name' => $programData->program_name ?? 'N/A',
-                    'duration'     => ($programData->duration ?? 0) . ' weeks',
-                    'primary_goal' => $programData->primary_goal ?? 'N/A',
-                    'intensity'    => $programData->intensity ?? 'Moderate'
+                    'program_id'        => $programData->program_id,
+                    'program_name'      => $programData->program_name ?? 'N/A',
+                    'duration'          => ($programData->duration ?? 0) . ' weeks',
+                    'primary_goal'      => $programData->primary_goal ?? 'N/A',
+                    'intensity'         => $programData->intensity ?? 'Moderate',
+                    'description'       => $programData->description ?? null,
+                    'workout_types'     => $workoutTypes,
+                    'notes'             => $programData->notes ?? null,
+                    'personalized_suggestions' => [
+                        'trainer_note'            => $adjustProgram?->note,
+                        'custom_workout_programs' => $adjustProgram?->programs,
+                        'primary_focus_area'      => $adjustProgram?->primary_focus_area,
+                        'target_macros'           => [
+                            'calories' => $adjustProgram?->calories ?? $programData->calories,
+                            'protein'  => $adjustProgram?->protein ?? $programData->protein,
+                            'carbs'    => $adjustProgram?->carbs ?? $programData->carbs,
+                            'fat'      => $adjustProgram?->fat ?? $programData->fat,
+                        ],
+                        'supplement_suggestions'  => $targetGoal?->supplement_recommendation ?? [],
+                        'recent_trainer_notes'    => $trainerNotes,
+                    ]
                 ]
             ], 200);
 
@@ -414,10 +469,30 @@ public function assignUsers(Request $request)
                     return $program;
                 });
 
+            $adjustProgram = \App\Models\AdjustProgram::where('user_id', $targetUserId)->first();
+            $recentNotes = \DB::table('profession_notes')
+                ->where('user_id', $targetUserId)
+                ->select('id', 'note', 'created_at')
+                ->latest()
+                ->take(5)
+                ->get();
+
             return response()->json([
                 'success' => true,
                 'total_connected_programs' => $userPrograms->count(),
-                'data' => $userPrograms
+                'data' => $userPrograms,
+                'personalized_suggestions' => [
+                    'custom_notes'            => $adjustProgram?->note,
+                    'custom_workout_programs' => $adjustProgram?->programs,
+                    'primary_focus_area'      => $adjustProgram?->primary_focus_area,
+                    'target_macros'           => [
+                        'calories' => $adjustProgram?->calories,
+                        'protein'  => $adjustProgram?->protein,
+                        'carbs'    => $adjustProgram?->carbs,
+                        'fat'      => $adjustProgram?->fat,
+                    ],
+                    'trainer_notes'           => $recentNotes,
+                ]
             ], 200);
 
         } catch (\Exception $e) {

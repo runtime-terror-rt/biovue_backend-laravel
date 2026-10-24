@@ -27,24 +27,45 @@ class TargetGoalController extends Controller
         }
 
         $validated = $request->validate([
-            'user_id'             => 'required|exists:users,id',
-            'target_weight'       => 'nullable|numeric|between:0,999.99',
-            'weekly_workout_goal' => 'nullable|integer|min:1|max:7',
-            'daily_step_goal'     => 'nullable|integer|min:0',
-            'sleep_target'        => 'nullable|numeric|between:0,24',
-            'start_date'          => 'nullable|date',
-            'end_date'            => 'nullable|date|after_or_equal:start_date',
-            'water_target'        => 'nullable|integer',
+            'user_id'                   => 'required|exists:users,id',
+            'target_weight'             => 'nullable|numeric|between:0,999.99',
+            'weekly_workout_goal'       => 'nullable|integer|min:1|max:7',
+            'daily_step_goal'           => 'nullable|integer|min:0',
+            'sleep_target'              => 'nullable|numeric|between:0,24',
+            'start_date'                => 'nullable|date',
+            'end_date'                  => 'nullable|date|after_or_equal:start_date',
+            'water_target'              => 'nullable|integer',
             'supplement_recommendation' => 'nullable|array',
+            'calories'                  => 'nullable|integer|min:0',
+            'protein'                   => 'nullable|integer|min:0',
+            'carbs'                     => 'nullable|integer|min:0',
+            'fat'                       => 'nullable|integer|min:0',
         ]);
+
+        $goalFields = collect($validated)->except(['calories', 'protein', 'carbs', 'fat'])->toArray();
 
         $goal = TargetGoal::updateOrCreate(
             ['user_id' => $validated['user_id']],
-            array_merge($validated, [
+            array_merge($goalFields, [
                 'profession_id' => $authUserId,
                 'is_active'     => true
             ])
         );
+
+        // Sync client macros to AdjustProgram if provided
+        $macroData = array_filter([
+            'calories' => $request->input('calories') ?? $request->input('target_calories'),
+            'protein'  => $request->input('protein') ?? $request->input('protein_target'),
+            'carbs'    => $request->input('carbs') ?? $request->input('carbs_target'),
+            'fat'      => $request->input('fat') ?? $request->input('fat_target'),
+        ], fn($v) => !is_null($v));
+
+        if (!empty($macroData)) {
+            \App\Models\AdjustProgram::updateOrCreate(
+                ['user_id' => $validated['user_id']],
+                $macroData
+            );
+        }
 
         $client = User::find($validated['user_id']);
 
@@ -55,6 +76,8 @@ class TargetGoalController extends Controller
                 'goal_updates'
             );
         }
+
+        $goal->macros = !empty($macroData) ? $macroData : \App\Models\AdjustProgram::where('user_id', $validated['user_id'])->select('calories', 'protein', 'carbs', 'fat')->first();
 
         return response()->json([
             'success' => true,
@@ -89,9 +112,19 @@ class TargetGoalController extends Controller
                 ->where('is_active', true)
                 ->get();
 
+            $macros = \App\Models\AdjustProgram::where('user_id', $targetId)
+                ->select('calories', 'protein', 'carbs', 'fat')
+                ->first();
+
+            $goals->transform(function ($g) use ($macros) {
+                $g->macros = $macros;
+                return $g;
+            });
+
             return response()->json([
                 'success' => true,
-                'data'    => $goals
+                'data'    => $goals,
+                'macros'  => $macros
             ], 200);
 
         } catch (\Exception $e) {

@@ -10,5 +10,6 @@ class ActivityLog extends Model
 
     protected $casts = [
         'log_date' => 'datetime',
+        'workouts' => 'array',
     ];
 }

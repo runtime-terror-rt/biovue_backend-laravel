@@ -52,10 +52,17 @@ class AIObservemetricsController extends Controller
             $nutritionAdherence = round(($totalServings / 10) * 100, 0);
         }
 
+        // Weight: Get latest logged body weight
+        $latestLoggedWeight = $user->activityLogs()
+            ->whereNotNull('weight')
+            ->where('weight', '>', 0)
+            ->orderByRaw('COALESCE(log_date, created_at) DESC')
+            ->value('weight');
+
         // JSON data
         $data = [
             'weight' => [
-                'value' => $latestActivity->weight ?? ($user->profile->weight ?? null),
+                'value' => $latestLoggedWeight ?? ($user->profile->weight ?? null),
                 'unit' => $user->profile->unit === 'metric' ? 'kg' : 'lbs',
                 'updated_at' => $latestActivity?->updated_at?->diffForHumans(),
             ],
@@ -199,8 +206,13 @@ class AIObservemetricsController extends Controller
                 $hydrationDisplay = round($rawGlasses * 8, 1) . ' oz';
             }
 
-            // Weight: fallback to user profile weight if activity log weight is missing
-            $latestWeight = $activity->weight ?? ($user->profile->weight ?? null);
+            // Weight: Always show the client's latest logged body weight, fallback to profile weight
+            $latestLoggedWeight = $user->activityLogs()
+                ->whereNotNull('weight')
+                ->where('weight', '>', 0)
+                ->orderByRaw('COALESCE(log_date, created_at) DESC')
+                ->value('weight');
+            $latestWeight = $latestLoggedWeight ?? ($user->profile->weight ?? null);
 
             return response()->json([
                 'success' => true,

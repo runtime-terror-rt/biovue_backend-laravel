@@ -13,30 +13,30 @@ use Illuminate\Support\Facades\DB;
 class NutritionController extends Controller
 {
     // List all logs for the authenticated user
-  public function index()
-{
-    try {
+    public function index(Request $request)
+    {
+        try {
+            $userId = $request->query('user_id') ?: ($request->query('client_id') ?: auth()->id());
+            $today = $request->query('log_date') ?: ($request->query('date') ?: now()->format('Y-m-d'));
 
-        $today = now()->format('Y-m-d');
+            $logs = NutritionLog::where('user_id', $userId)
+                ->whereDate('log_date', $today)
+                ->orderBy('id', 'desc')
+                ->get();
 
-        $logs = NutritionLog::where('user_id', auth()->id())
-            ->whereDate('log_date', $today)
-            ->orderBy('id', 'desc')
-            ->get();
+            return response()->json([
+                'success' => true,
+                'data' => $logs
+            ]);
 
-        return response()->json([
-            'success' => true,
-            'data' => $logs
-        ]);
+        } catch (\Exception $e) {
 
-    } catch (\Exception $e) {
-
-        return response()->json([
-            'success' => false,
-            'message' => $e->getMessage()
-        ], 500);
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage()
+            ], 500);
+        }
     }
-}
 
 
 

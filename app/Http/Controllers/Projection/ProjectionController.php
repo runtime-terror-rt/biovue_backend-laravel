@@ -12,9 +12,27 @@ use Illuminate\Support\Facades\Log;
 
 class ProjectionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $user = auth()->user();
+        $loggedInUser = auth()->user();
+        $targetUserId = $request->query('user_id') 
+            ?: ($request->query('client_id') ?: $loggedInUser->id);
+
+        if ($targetUserId != $loggedInUser->id) {
+            $isConnected = DB::table('connect_user_proffesions')
+                ->where('profession_id', $loggedInUser->id)
+                ->where('user_id', $targetUserId)
+                ->exists();
+
+            if (!$isConnected && $loggedInUser->user_type !== 'admin' && $loggedInUser->user_type !== 'professional') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized: You do not have permission to view these projections.'
+                ], 403);
+            }
+        }
+
+        $user = \App\Models\User::find($targetUserId) ?: $loggedInUser;
 
         $daysSinceJoined = now()->diffInDays($user->created_at);
         $hasPaidPlan = ($user->plan && !str_contains(strtolower($user->plan->name), 'free'))
@@ -446,7 +464,24 @@ class ProjectionController extends Controller
 
     public function show($id)
     {
-        $projection = ProjectionData::where('user_id', auth()->id())->findOrFail($id);
+        $loggedInUser = auth()->user();
+
+        $projection = ProjectionData::findOrFail($id);
+
+        // Allow owner, admin, or connected professional
+        if ($projection->user_id !== $loggedInUser->id && $loggedInUser->user_type !== 'admin') {
+            $isConnected = DB::table('connect_user_proffesions')
+                ->where('profession_id', $loggedInUser->id)
+                ->where('user_id', $projection->user_id)
+                ->exists();
+
+            if (!$isConnected && $loggedInUser->user_type !== 'professional') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized to view this projection.'
+                ], 403);
+            }
+        }
         
         $pData = $projection->projections_data;
 

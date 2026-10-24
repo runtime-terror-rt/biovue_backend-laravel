@@ -675,6 +675,11 @@ class UserController extends Controller
             return $str !== null && isset($str->stress_level);
         });
 
+        $weightDays = $buildDayList(function($dStr) use ($activityLogs) {
+            $act = $activityLogs->firstWhere('log_date', $dStr);
+            return $act && !empty($act->weight) && (float)$act->weight > 0;
+        });
+
         $hydrationAvg = ($unit === 'imperial') ? $avgHydrationOz : $avgHydrationGlasses;
         $hydrationSuffix = ($unit === 'imperial') ? "Ounces avg" : "glasses avg";
 
@@ -747,7 +752,8 @@ class UserController extends Controller
                     $this->formatMetric("Activity", $activityLogs->avg('daily_steps'), "steps avg", $activityDays, $days, true),
                     $this->formatMetric("Hydration", $hydrationAvg, $hydrationSuffix, $hydrationDays, $days),
                     $this->formatMetric("Nutrition", $nutritionCount, "entries total", $nutritionDays, $days),
-                    $this->formatMetric("Stress", $stressLogs->avg('stress_level'), "/10 level", $stressDays, $days)
+                    $this->formatMetric("Stress", $stressLogs->avg('stress_level'), "/10 level", $stressDays, $days),
+                    $this->formatMetric("Weight", $latestWeight, "$unitLabel latest", $weightDays, $days)
                 ]
             ]
         ]);
@@ -776,7 +782,7 @@ class UserController extends Controller
         return [
             'title'       => $title,
             'avg'         => "$val $suffix",
-            'status'      => $uniqueCount >= ($days * 0.6) ? "ON TRACK" : "Need Attention",
+            'status'      => ($title === 'Weight' ? ($uniqueCount >= 1 || (float)$val > 0) : ($uniqueCount >= ($days * 0.6))) ? "ON TRACK" : "Need Attention",
             'ratio'       => "$uniqueCount/$days Days",
             'logged_days' => $uniqueCount,
             'total_days'  => $days,

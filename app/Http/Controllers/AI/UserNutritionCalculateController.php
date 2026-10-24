@@ -131,15 +131,69 @@ class UserNutritionCalculateController extends Controller
      */
     public function show(Request $request)
     {
-        $user = $request->user(); // Logged-in user
-        $logDate = $this->resolveLogDate($request);
+        $loggedInUser = $request->user();
+        $targetUserId = $request->query('user_id') 
+            ?? $request->query('client_id') 
+            ?? $request->input('user_id') 
+            ?? $loggedInUser->id;
 
-        $aggregated = $this->aggregateForDate($user->id, $logDate);
+        if ($targetUserId != $loggedInUser->id) {
+            $isConnected = \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
+                ->where('profession_id', $loggedInUser->id)
+                ->where('user_id', $targetUserId)
+                ->exists();
+
+            if (!$isConnected && $loggedInUser->user_type !== 'admin' && $loggedInUser->user_type !== 'professional') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized: You do not have permission to view this client food log.'
+                ], 403);
+            }
+        }
+
+        $requestedDateSpecified = $request->filled('date') || $request->filled('log_date');
+        $logDate = $this->resolveLogDate($request);
+        $aggregated = $this->aggregateForDate($targetUserId, $logDate);
+
+        // If today has no logged meals and no specific date was requested, fallback to the client's most recent logged date
+        $isFallback = false;
+        if ($aggregated === null && !$requestedDateSpecified) {
+            $latestEntry = UserNutritionCalculate::where('user_id', $targetUserId)
+                ->orderByRaw('COALESCE(log_date, created_at) DESC')
+                ->first();
+
+            if ($latestEntry) {
+                $latestDate = $latestEntry->log_date 
+                    ? \Carbon\Carbon::parse($latestEntry->log_date)->toDateString() 
+                    : \Carbon\Carbon::parse($latestEntry->created_at)->toDateString();
+                $aggregated = $this->aggregateForDate($targetUserId, $latestDate);
+                $isFallback = true;
+            }
+        }
 
         if ($aggregated === null) {
             return response()->json([
-                'message' => 'No nutrition data found for this user on ' . $logDate
-            ], 404);
+                'success' => true,
+                'message' => 'No nutrition data found for this user on ' . $logDate,
+                'data' => [
+                    'log_date'  => $logDate,
+                    'nutrition' => [
+                        'calories' => ['value' => 0, 'unit' => 'kcal'],
+                        'macros'   => [
+                            'protein' => ['value' => 0, 'unit' => 'g'],
+                            'carbs'   => ['value' => 0, 'unit' => 'g'],
+                            'fat'     => ['value' => 0, 'unit' => 'g'],
+                        ],
+                        'total'    => 0,
+                        'foods'    => []
+                    ]
+                ]
+            ], 200);
+        }
+
+        if ($isFallback && isset($aggregated['data'])) {
+            $aggregated['data']['is_latest_fallback'] = true;
+            $aggregated['data']['requested_today_empty'] = true;
         }
 
         return response()->json($aggregated, 200);
