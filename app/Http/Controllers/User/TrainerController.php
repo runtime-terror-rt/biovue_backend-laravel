@@ -251,8 +251,60 @@ class TrainerController extends Controller
 
         $trainer = auth()->user();
 
+        // 1. Check if capacity reached
         if ($this->isCapacityReached($trainer->id)) {
-            return response()->json(['success' => false, 'message' => 'Capacity reached'], 400);
+            return response()->json(['success' => false, 'message' => 'Capacity reached. You cannot invite more clients.'], 400);
+        }
+
+        // 2. Check if trainer has enough member credits (at least 1 credit required)
+        $trainerCredit = ProjectionCredit::where('user_id', $trainer->id)->first();
+        if (!$trainerCredit || $trainerCredit->member_limit <= 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have enough client member credits to invite new clients. Please upgrade your subscription.'
+            ], 400);
+        }
+
+        // 3. Check if the user is already connected to this trainer
+        $existingUser = \App\Models\User::where('email', $request->email)->first();
+        if ($existingUser) {
+            $alreadyConnected = DB::table('connect_user_proffesions')
+                ->where('profession_id', $trainer->id)
+                ->where('user_id', $existingUser->id)
+                ->exists();
+
+            if ($alreadyConnected) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'This client is already connected to you and active in your client roster.'
+                ], 400);
+            }
+        }
+
+        // 4. Check if an invitation was already accepted for this email by this trainer
+        $alreadyAcceptedInvite = Invitation::where('trainer_id', $trainer->id)
+            ->where('email', $request->email)
+            ->where('status', 'accepted')
+            ->first();
+
+        if ($alreadyAcceptedInvite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'An invitation for this email has already been accepted by the client. You cannot re-invite an accepted client.'
+            ], 400);
+        }
+
+        // 5. Check if there is already a pending invitation sent to this email by this trainer
+        $pendingInvite = Invitation::where('trainer_id', $trainer->id)
+            ->where('email', $request->email)
+            ->where('status', 'pending')
+            ->first();
+
+        if ($pendingInvite) {
+            return response()->json([
+                'success' => false,
+                'message' => 'An invitation has already been sent to this email and is currently pending acceptance. You cannot send multiple invitations to the same email.'
+            ], 400);
         }
 
         $details = [
@@ -261,17 +313,11 @@ class TrainerController extends Controller
         ];
 
         try {
-            return DB::transaction(function () use ($request, $trainer, $details) {
+            return DB::transaction(function () use ($request, $trainer, $details, $existingUser) {
                 $plainPassword = $this->generateStrongPassword();
 
-                $user = \App\Models\User::where('email', $request->email)->first();
-
-                if ($user) {
-                    $user->update([
-                        'password' => Hash::make($plainPassword),
-                        'status' => 'pending'
-                    ]);
-                } else {
+                // Only create user or set initial password if user does not exist
+                if (!$existingUser) {
                     $user = \App\Models\User::create([
                         'email' => $request->email,
                         'name' => 'Invite User',
@@ -280,13 +326,17 @@ class TrainerController extends Controller
                         'user_type' => 'individual',
                         'is_invited' => true
                     ]);
+                } else {
+                    $user = $existingUser;
                 }
 
                 $token = \Illuminate\Support\Str::random(40);
                 Invitation::updateOrCreate(
-                    ['email' => $request->email],
                     [
                         'trainer_id' => $trainer->id,
+                        'email' => $request->email
+                    ],
+                    [
                         'token' => $token,
                         'status' => 'pending'
                     ]
@@ -295,7 +345,7 @@ class TrainerController extends Controller
                 \Illuminate\Support\Facades\Mail::to($request->email)
                     ->send(new \App\Mail\InvitationMail($trainer, $token, $details, $request->email, $plainPassword));
 
-                return response()->json(['success' => true, 'message' => 'Invitation sent!']);
+                return response()->json(['success' => true, 'message' => 'Invitation sent successfully!']);
             });
         } catch (\Exception $e) {
             \Log::error("Invitation Error: " . $e->getMessage());
@@ -305,18 +355,38 @@ class TrainerController extends Controller
     
     private function isCapacityReached($professionalId)
     {
-        $limit = ProjectionCredit::where('user_id', $professionalId)->value('member_limit') ?? 0;
+        $trainer = \App\Models\User::find($professionalId);
+        $planLimit = (int)($trainer?->plan?->member_limit ?? 0);
+        if (!$planLimit) {
+            $latestPayment = \App\Models\PlanPayment::where('user_id', $professionalId)->latest()->first();
+            $planLimit = (int)($latestPayment?->plan?->member_limit ?? 0);
+        }
 
         $currentConnections = \DB::table('connect_user_proffesions')
                                 ->where('profession_id', $professionalId)
                                 ->count();
 
-        return $currentConnections >= $limit;
+        if ($planLimit > 0) {
+            return $currentConnections >= $planLimit;
+        }
+
+        $limit = ProjectionCredit::where('user_id', $professionalId)->value('member_limit') ?? 0;
+        return $limit <= 0;
     }
 
     public function acceptInvitation($token)
     {
-        $invitation = Invitation::where('token', $token)->where('status', 'pending')->firstOrFail();
+        $invitation = Invitation::where('token', $token)->first();
+
+        if (!$invitation) {
+            return redirect()->to('https://biovuedigitalwellness.com/login?error=Invalid+or+expired+invitation+token');
+        }
+
+        // Prevent double accept
+        if ($invitation->status === 'accepted') {
+            return redirect()->to('https://biovuedigitalwellness.com/login?message=This+invitation+has+already+been+accepted');
+        }
+
         $user = \App\Models\User::where('email', $invitation->email)->first();
 
         if (!$user) {
@@ -342,22 +412,27 @@ class TrainerController extends Controller
 
                 $trainerCredit = ProjectionCredit::where('user_id', $invitation->trainer_id)->first();
 
-                if ($trainerCredit && $trainerCredit->projection_limit >= 2) {
-                    
-                    $trainerCredit->decrement('projection_limit', 2);
+                // 1 credit is deducted per client email
+                if ($trainerCredit && $trainerCredit->member_limit >= 1) {
                     $trainerCredit->decrement('member_limit', 1);
 
-                    ProjectionCredit::updateOrCreate(
-                        ['user_id' => $user->id],
-                        [
-                            'projection_limit' => 2,
-                            'expiry_date'     => $trainerCredit->expiry_date,
-                            'created_at'      => now(),
-                            'updated_at'      => now()
-                        ]
-                    );
+                    // Transfer 1 projection credit if available
+                    if ($trainerCredit->projection_limit >= 1) {
+                        $trainerCredit->decrement('projection_limit', 1);
+
+                        ProjectionCredit::updateOrCreate(
+                            ['user_id' => $user->id],
+                            [
+                                'projection_limit' => 1,
+                                'expiry_date'     => $trainerCredit->expiry_date,
+                                'created_at'      => now(),
+                                'updated_at'      => now()
+                            ]
+                        );
+                    }
                 }
 
+                // Mark invitation accepted so it cannot be used again
                 $invitation->update(['status' => 'accepted']);
 
                 return redirect()->to('https://biovuedigitalwellness.com/login?message=Account+activated+successfully');

@@ -61,9 +61,12 @@ class TargetGoalController extends Controller
         ], fn($v) => !is_null($v));
 
         if (!empty($macroData)) {
+            $adjustData = array_merge($macroData, [
+                'profession_id' => $authUserId ?: ($goal->profession_id ?? null),
+            ]);
             \App\Models\AdjustProgram::updateOrCreate(
                 ['user_id' => $validated['user_id']],
-                $macroData
+                $adjustData
             );
         }
 

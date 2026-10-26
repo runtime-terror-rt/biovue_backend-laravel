@@ -32,6 +32,7 @@ class UserProfileController extends Controller
             'user_type'       => 'required|in:individual,professional',
             'profession_type' => 'nullable|string|in:trainer_coach,nutritionist,supplement_supplier',
             'unit'             => 'nullable|string',
+            'unit_system'      => 'nullable|string',
             'age'              => 'nullable|integer',
             'sex'              => 'nullable|string|max:20',
             'image' => [
@@ -111,7 +112,11 @@ class UserProfileController extends Controller
         ];
         $medicalData = collect($validated)->only($medicalFields)->toArray();
 
-        $profileData = collect($validated)->except(array_merge(['user_id', 'name', 'user_type', 'profession_type'], $medicalFields))->toArray();
+        if ($request->filled('unit_system') && empty($validated['unit'])) {
+            $validated['unit'] = $request->input('unit_system');
+        }
+
+        $profileData = collect($validated)->except(array_merge(['user_id', 'name', 'user_type', 'profession_type', 'unit_system'], $medicalFields))->toArray();
 
         UserProfile::updateOrCreate(['user_id' => $validated['user_id']], $profileData);
 
@@ -394,10 +399,37 @@ class UserProfileController extends Controller
         $projectionsCount = \App\Models\ProjectionData::where('user_id', $user->id)->count();
         $latestProjection = \App\Models\ProjectionData::where('user_id', $user->id)->latest()->first();
     
+        $usedSeats = \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
+            ->where('profession_id', $user->id)
+            ->count();
+
+        $planMemberLimit = (int)($userPlan?->member_limit ?? ($latestPayment?->plan?->member_limit ?? 0));
+        $creditMemberLimit = (int)($projectionCredit->member_limit ?? 0);
+
+        if ($planMemberLimit > 0) {
+            $totalSeats = $planMemberLimit;
+            $remainingSeats = max(0, $totalSeats - $usedSeats);
+        } else {
+            $totalSeats = $usedSeats + $creditMemberLimit;
+            $remainingSeats = $creditMemberLimit;
+        }
+
+        if ($totalSeats <= 0 && $usedSeats > 0) {
+            $totalSeats = $usedSeats;
+        }
+
+        $seatsRatio = "{$usedSeats}/{$totalSeats}";
+    
         return response()->json([
             'success'              => true,
             'projection_limit'     => $projectionCredit->projection_limit,
-            'member_limit'         => $projectionCredit->member_limit,
+            'member_limit'         => $remainingSeats,
+            'used_seats'           => $usedSeats,
+            'total_seats'          => $totalSeats,
+            'remaining_seats'      => $remainingSeats,
+            'seats_ratio'          => $seatsRatio,
+            'seats_left'           => $remainingSeats,
+            'seats_left_text'      => "{$remainingSeats} seats left",
             'expired_at'           => $countdownExpiredAt,
             'show_countdown'       => $showCountdown,
             'is_cancelled'         => $isCancelled,

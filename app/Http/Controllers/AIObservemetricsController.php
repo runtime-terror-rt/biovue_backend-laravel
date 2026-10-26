@@ -213,11 +213,14 @@ class AIObservemetricsController extends Controller
                 ->orderByRaw('COALESCE(log_date, created_at) DESC')
                 ->value('weight');
             $latestWeight = $latestLoggedWeight ?? ($user->profile->weight ?? null);
+            $weightUnit = ($user->profile->unit ?? 'imperial') === 'metric' ? 'kg' : 'lbs';
+            $formattedWeight = $latestWeight ? ($latestWeight . ' ' . $weightUnit) : null;
 
             return response()->json([
                 'success' => true,
                 'data' => [
-                    'weight'            => $latestWeight,
+                    'weight'            => $formattedWeight,
+                    'weight_unit'       => $weightUnit,
                     'nutrition_quality' => $nutritionQuality . '%',
                     'steps'             => (int)($activity->daily_steps ?? 0),
                     'sleep'             => $sleepFormatted,

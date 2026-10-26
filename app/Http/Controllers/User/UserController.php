@@ -844,9 +844,7 @@ class UserController extends Controller
         $bmiScore = 0;
         $height = $user->profile->height ?? 0;
         if ($height > 0 && $latestWeight > 0) {
-            $weightInKg = ($unit === 'imperial') ? $latestWeight * 0.453592 : $latestWeight;
-            $heightInMeters = $height / 100;
-            $bmiScore = round($weightInKg / ($heightInMeters * $heightInMeters), 1);
+            $bmiScore = $this->calculateSmartBMI($latestWeight, $height, $unit);
         }
 
         $actualLogsCount = $activityLogs->count() + $nutritionLogs->count() + $sleepLogs->count() + $hydrationLogs->count();
@@ -1151,18 +1149,60 @@ class UserController extends Controller
             $calorieAdherence[] = $adherencePct;
         }
 
+        // Current day calorie intake total box (over / under calculation for today)
+        $todayDateStr = now()->toDateString();
+        $todayNutri = $nutritionLogs->filter(function($n) use ($todayDateStr) {
+            $createdDate = isset($n->log_date) ? date('Y-m-d', strtotime($n->log_date)) : date('Y-m-d', strtotime($n->created_at));
+            return $createdDate == $todayDateStr;
+        });
+
+        $todayCalories = (float) $todayNutri->sum('calories_value');
+        $effectiveTarget = $targetCalories > 0 ? $targetCalories : 2000;
+        $diff = $todayCalories - $effectiveTarget;
+        $absDiff = abs($diff);
+        $diffPct = $effectiveTarget > 0 ? round(($absDiff / $effectiveTarget) * 100) : 0;
+        $intakePct = $effectiveTarget > 0 ? round(($todayCalories / $effectiveTarget) * 100) : 0;
+
+        $status = ($todayCalories == 0)
+            ? 'no_data'
+            : ($diff > 0 ? 'over' : ($diff < 0 ? 'under' : 'on_track'));
+
+        $label = match($status) {
+            'over'     => '+' . round($absDiff) . ' kcal over target',
+            'under'    => '-' . round($absDiff) . ' kcal under target',
+            'on_track' => 'On target',
+            default    => '0 kcal logged today',
+        };
+
+        $currentDayCalorieBox = [
+            'date'            => $todayDateStr,
+            'intake_calories' => round($todayCalories),
+            'target_calories' => round($effectiveTarget),
+            'difference'      => round($diff),
+            'abs_difference'  => round($absDiff),
+            'status'          => $status,
+            'is_over'         => $diff > 0,
+            'is_under'        => $diff < 0,
+            'percentage'      => $intakePct,
+            'diff_percentage' => $diffPct,
+            'label'           => $label,
+            'badge'           => ($diff >= 0 ? '+' : '-') . $diffPct . '% ' . ($diff >= 0 ? 'over' : 'under'),
+        ];
+
         return [
             'weight' => ['labels' => $labels, 'data' => $weightData, 'total_progress' => $this->getWeightDiff($activityLogs)],
             'activity' => ['labels' => $labels, 'data' => $stepData],
             'sleep' => ['labels' => $labels, 'data' => $sleepData],
             'hydration' => ['labels' => $labels, 'data' => $hydrationData],
             'stress' => ['labels' => $labels, 'data' => $stressData],
+            'current_day_calorie_box' => $currentDayCalorieBox,
             'nutrition' => [
                 'labels' => $labels,
                 'calories' => $calories,
                 'calorie_percentage' => $calorieAdherence,
                 'adherence_pct' => $calorieAdherence,
                 'target_calories' => $targetCalories,
+                'current_day_calorie_box' => $currentDayCalorieBox,
                 'datasets' => [
                     ['label' => 'Protein', 'data' => $protein, 'color' => '#34A853'],
                     ['label' => 'Carbs', 'data' => $carbs, 'color' => '#4285F4'],
@@ -1384,10 +1424,81 @@ class UserController extends Controller
                 ? round($groupedNutritionByDay->map(fn($day) => $day->sum('calories_value'))->avg())
                 : 0;
 
+            // Current day calorie intake total box (over / under calculation for today)
+            $todayDateStr = now()->toDateString();
+            $todayNutritions = $nutrition->filter(function($item) use ($todayDateStr) {
+                $itemDate = !empty($item->log_date) ? date('Y-m-d', strtotime($item->log_date)) : date('Y-m-d', strtotime($item->created_at));
+                return $itemDate === $todayDateStr;
+            });
+
+            // Calculate calories from calories_value or from macros (P*4 + C*4 + F*9)
+            $todayCalories = (float) $todayNutritions->sum(function($item) {
+                if (!empty($item->calories_value) && (float)$item->calories_value > 0) {
+                    return (float)$item->calories_value;
+                }
+                $p = (float)($item->protein_value ?? 0);
+                $c = (float)($item->carbs_value ?? 0);
+                $f = (float)($item->fat_value ?? 0);
+                return ($p * 4) + ($c * 4) + ($f * 9);
+            });
+
+            // If $todayCalories is still 0, check the last day of the chart data (which represents today!)
+            if ($todayCalories <= 0 && !empty($chartData)) {
+                $lastDay = end($chartData);
+                $lastDayNutr = $lastDay['nutrition'] ?? null;
+                if ($lastDayNutr) {
+                    $cals = (float)($lastDayNutr['calories'] ?? 0);
+                    if ($cals <= 0) {
+                        $p = (float)($lastDayNutr['protein'] ?? 0);
+                        $c = (float)($lastDayNutr['carbs'] ?? 0);
+                        $f = (float)($lastDayNutr['fats'] ?? 0);
+                        $cals = ($p * 4) + ($c * 4) + ($f * 9);
+                    }
+                    if ($cals > 0) {
+                        $todayCalories = $cals;
+                        if (!empty($lastDay['date'])) {
+                            $todayDateStr = $lastDay['date'];
+                        }
+                    }
+                }
+            }
+            $targetCalories = $targetCal > 0 ? $targetCal : 2000;
+            $diff = $todayCalories - $targetCalories;
+            $absDiff = abs($diff);
+            $diffPct = $targetCalories > 0 ? round(($absDiff / $targetCalories) * 100) : 0;
+            $intakePct = $targetCalories > 0 ? round(($todayCalories / $targetCalories) * 100) : 0;
+
+            $status = ($todayCalories == 0)
+                ? 'no_data'
+                : ($diff > 0 ? 'over' : ($diff < 0 ? 'under' : 'on_track'));
+
+            $label = match($status) {
+                'over'     => '+' . round($absDiff) . ' kcal over target',
+                'under'    => '-' . round($absDiff) . ' kcal under target',
+                'on_track' => 'On target',
+                default    => '0 kcal logged today',
+            };
+
+            $currentDayCalorieBox = [
+                'date'            => $todayDateStr,
+                'intake_calories' => round($todayCalories),
+                'target_calories' => round($targetCalories),
+                'difference'      => round($diff),
+                'abs_difference'  => round($absDiff),
+                'status'          => $status,
+                'is_over'         => $diff > 0,
+                'is_under'        => $diff < 0,
+                'percentage'      => $intakePct,
+                'diff_percentage' => $diffPct,
+                'label'           => $label,
+                'badge'           => ($diff >= 0 ? '+' : '-') . $diffPct . '% ' . ($diff >= 0 ? 'over' : 'under'),
+            ];
+
             return response()->json([
                 'success' => true,
                 'client_name' => $userData->name,
                 'charts' => $chartData, 
+                'current_day_calorie_box' => $currentDayCalorieBox,
                 'health_overview' => [
                     'weight' => [
                         'current' => $latestWeight,
@@ -1409,7 +1520,8 @@ class UserController extends Controller
                     ],
                     'nutrition' => [
                         'avg_calories' => $avgDailyCalories,
-                        'total_logs'   => $nutrition->count()
+                        'total_logs'   => $nutrition->count(),
+                        'current_day_calorie_box' => $currentDayCalorieBox
                     ],
                     'projections_used' => [
                         'count' => $projectionsCount
@@ -1482,12 +1594,31 @@ class UserController extends Controller
 
             $attentionCount = $clientsTable->where('status', 'Need attention')->count();
 
+            $planMemberLimit = (int)($coach->plan?->member_limit ?? 0);
+            if (!$planMemberLimit) {
+                $latestPayment = PlanPayment::where('user_id', $coachId)->latest()->first();
+                $planMemberLimit = (int)($latestPayment?->plan?->member_limit ?? 0);
+            }
+            $creditMemberLimit = (int)($coach->projectionCredits->member_limit ?? 0);
+            $totalSeats = $planMemberLimit > 0 ? $planMemberLimit : ($activeCount + $creditMemberLimit);
+            if ($totalSeats <= 0 && $activeCount > 0) {
+                $totalSeats = $activeCount;
+            }
+            $remainingSeats = max(0, $totalSeats - $activeCount);
+
             return response()->json([
                 'success' => true,
                 'stats' => [
                     'active_clients'    => [
                         'value' => $activeCount, 
                         'label' => 'Currently coached'
+                    ],
+                    'seats'             => [
+                        'used'      => $activeCount,
+                        'total'     => $totalSeats,
+                        'remaining' => $remainingSeats,
+                        'ratio'     => "{$activeCount}/{$totalSeats}",
+                        'label'     => "{$remainingSeats} seats left",
                     ],
                     'needing_attention' => [
                         'value' => $attentionCount, 

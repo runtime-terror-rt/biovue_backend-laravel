@@ -39,7 +39,9 @@ class AdjustProgramController extends Controller
 
         $program = AdjustProgram::updateOrCreate(
             ['user_id' => $validated['user_id']],
-            $validated
+            array_merge($validated, [
+                'profession_id' => $authUser->id,
+            ])
         );
 
         $client = \App\Models\User::find($validated['user_id']);

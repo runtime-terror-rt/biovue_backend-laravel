@@ -9,6 +9,13 @@ class UserProfile extends Model
 {
     protected $guarded = [];
 
+    protected $appends = ['unit_system'];
+
+    public function getUnitSystemAttribute()
+    {
+        return $this->unit ?? 'imperial';
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);
