@@ -32,7 +32,11 @@ class MessageController extends Controller
             return response()->json(['success' => false, 'message' => 'Failed to save message'], 500);
         }
 
-        broadcast(new MessageSent($msg->load('sender')))->toOthers();
+        try {
+            broadcast(new MessageSent($msg->load('sender')))->toOthers();
+        } catch (\Throwable $e) {
+            Log::warning('Broadcast failed (Reverb/Pusher offline): ' . $e->getMessage());
+        }
 
         $receiver = User::find($request->receiver_id);
         $settings = UserNotificationSetting::where('user_id', $receiver->id)->first();

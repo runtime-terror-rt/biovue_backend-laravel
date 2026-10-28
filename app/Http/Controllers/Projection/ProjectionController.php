@@ -66,11 +66,25 @@ class ProjectionController extends Controller
             $currentLifestyleUrl = $this->resolveProjectionImageUrl($pData['current_lifestyle'] ?? null);
             $futureGoalUrl       = $this->resolveProjectionImageUrl($pData['future_goal'] ?? null);
 
+            $inputImg = $projection->input_image;
+            $inputImageUrl = '';
+            if (!empty($inputImg)) {
+                if (str_starts_with($inputImg, 'http://') || str_starts_with($inputImg, 'https://')) {
+                    $inputImageUrl = $inputImg;
+                } else {
+                    $clean = ltrim($inputImg, '/');
+                    if (str_starts_with($clean, 'storage/')) {
+                        $clean = substr($clean, 8);
+                    }
+                    $inputImageUrl = asset('storage/' . $clean);
+                }
+            }
+
             return [
                 'id' => $projection->id,
                 'title'   => 'Projection Results',
                 'timeframe' => $projection->timeframe,
-                'input_image' => asset('storage/' . $projection->input_image), 
+                'input_image' => $inputImageUrl, 
 
                 'projections' => [
                     'current_lifestyle' => [
@@ -573,26 +587,56 @@ class ProjectionController extends Controller
      * @param array|null $item
      * @return string
      */
-    protected function resolveProjectionImageUrl(?array $item): string
+    protected function resolveProjectionImageUrl($item): string
     {
         if (empty($item)) {
             return '';
         }
 
-        // 1. If stored locally and file exists on public disk
-        if (!empty($item['local_image'])) {
-            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($item['local_image'])) {
-                return asset('storage/' . $item['local_image']);
+        if (is_string($item)) {
+            if (str_starts_with($item, 'http://') || str_starts_with($item, 'https://')) {
+                return $item;
             }
+            $clean = ltrim($item, '/');
+            if (str_starts_with($clean, 'storage/')) {
+                $clean = substr($clean, 8);
+            }
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($clean)) {
+                return asset('storage/' . $clean);
+            }
+            return 'https://ai.biovuedigitalwellness.com/' . $clean;
         }
 
-        // 2. Fallback to remote AI server URL
-        if (!empty($item['projection_url'])) {
-            $url = $item['projection_url'];
-            if (str_starts_with($url, 'http://') || str_starts_with($url, 'https://')) {
-                return $url;
+        if (!is_array($item)) {
+            return '';
+        }
+
+        // 1. If stored locally and file exists on public disk
+        if (!empty($item['local_image']) && is_string($item['local_image'])) {
+            $local = ltrim($item['local_image'], '/');
+            if (str_starts_with($local, 'storage/')) {
+                $local = substr($local, 8);
             }
-            return 'https://ai.biovuedigitalwellness.com/' . ltrim($url, '/');
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($local)) {
+                return asset('storage/' . $local);
+            }
+            return asset('storage/' . $local);
+        }
+
+        // 2. Direct image or candidate URL key
+        $candidateUrl = $item['projection_url'] ?? ($item['image'] ?? ($item['image_url'] ?? ($item['url'] ?? null)));
+        if (!empty($candidateUrl) && is_string($candidateUrl)) {
+            if (str_starts_with($candidateUrl, 'http://') || str_starts_with($candidateUrl, 'https://')) {
+                return $candidateUrl;
+            }
+            $clean = ltrim($candidateUrl, '/');
+            if (str_starts_with($clean, 'storage/')) {
+                $clean = substr($clean, 8);
+            }
+            if (\Illuminate\Support\Facades\Storage::disk('public')->exists($clean)) {
+                return asset('storage/' . $clean);
+            }
+            return 'https://ai.biovuedigitalwellness.com/' . $clean;
         }
 
         return '';
