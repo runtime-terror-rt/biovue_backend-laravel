@@ -99,13 +99,14 @@ class SupplyerController extends Controller
     public function userIndex()
 {
     try {
-        $users = User::with('targetGoals')
+        $users = User::with(['targetGoals', 'profile'])
             ->where('user_type', 'individual')
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($user) {
 
                 $goal = $user->targetGoals; // hasOne relation
+                $profile = $user->profile;
 
                 return [
                     'id' => $user->id,
@@ -114,6 +115,22 @@ class SupplyerController extends Controller
                     'user_type' => ucfirst($user->user_type),
                     'profile_image' => $user->image ? asset('storage/' . $user->image) : null,
                     'joined_at' => $user->created_at->format('Y-m-d'),
+
+                    'profile' => $profile ? [
+                        'id' => $profile->id,
+                        'age' => $profile->age,
+                        'sex' => $profile->sex,
+                        'height' => $profile->height,
+                        'weight' => $profile->weight,
+                        'unit' => $profile->unit ?? 'imperial',
+                        'is_athletic' => (bool)$profile->is_athletic,
+                        'toned' => (bool)$profile->toned,
+                        'lean' => (bool)$profile->lean,
+                        'muscular' => (bool)$profile->muscular,
+                        'curvy_fit' => (bool)$profile->curvy_fit,
+                        'body_goal' => $profile->notes,
+                        'notes' => $profile->notes,
+                    ] : null,
 
                     'target_goals' => $goal ? [
                         'id' => $goal->id,
@@ -421,6 +438,116 @@ class SupplyerController extends Controller
             \DB::rollBack();
             return response()->json([
                 'success' => false,
+                'error'   => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function updateWalkInClient(Request $request, $id)
+    {
+        $validated = $request->validate([
+            'name'                      => 'sometimes|required|string|max:255',
+            'email'                     => 'sometimes|nullable|email|max:255',
+            'phone'                     => 'nullable|string|max:30',
+            'unit'                      => 'nullable|string',
+            'height'                    => 'nullable|numeric',
+            'weight'                    => 'nullable|numeric',
+            'age'                       => 'nullable|integer',
+            'sex'                       => 'nullable|string',
+            'body_goal'                 => 'nullable|string',
+            'target_weight'             => 'nullable|numeric',
+            'daily_step_goal'           => 'nullable|integer',
+            'is_athletic'               => 'nullable|boolean',
+            'toned'                     => 'nullable|boolean',
+            'lean'                      => 'nullable|boolean',
+            'muscular'                  => 'nullable|boolean',
+            'curvy_fit'                 => 'nullable|boolean',
+            'supplement_recommendation' => 'nullable|array',
+        ]);
+
+        try {
+            \DB::beginTransaction();
+
+            $user = User::findOrFail($id);
+
+            // Update user basic details
+            if (!empty($validated['name'])) {
+                $user->name = $validated['name'];
+            }
+            if (!empty($validated['email']) && $validated['email'] !== $user->email) {
+                $exists = User::where('email', $validated['email'])->where('id', '!=', $user->id)->exists();
+                if ($exists) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'The email has already been taken by another user.',
+                    ], 422);
+                }
+                $user->email = $validated['email'];
+            }
+            $user->save();
+
+            // Update or create user profile
+            $profileUpdate = [];
+            if (array_key_exists('unit', $validated)) $profileUpdate['unit'] = $validated['unit'] ?? 'imperial';
+            if (array_key_exists('height', $validated)) $profileUpdate['height'] = $validated['height'];
+            if (array_key_exists('weight', $validated)) $profileUpdate['weight'] = $validated['weight'];
+            if (array_key_exists('age', $validated)) $profileUpdate['age'] = $validated['age'];
+            if (array_key_exists('sex', $validated)) $profileUpdate['sex'] = $validated['sex'];
+            if (array_key_exists('is_athletic', $validated)) $profileUpdate['is_athletic'] = (bool)$validated['is_athletic'];
+            if (array_key_exists('toned', $validated)) $profileUpdate['toned'] = (bool)$validated['toned'];
+            if (array_key_exists('lean', $validated)) $profileUpdate['lean'] = (bool)$validated['lean'];
+            if (array_key_exists('muscular', $validated)) $profileUpdate['muscular'] = (bool)$validated['muscular'];
+            if (array_key_exists('curvy_fit', $validated)) $profileUpdate['curvy_fit'] = (bool)$validated['curvy_fit'];
+            if (array_key_exists('body_goal', $validated)) $profileUpdate['notes'] = $validated['body_goal'];
+
+            if (!empty($profileUpdate)) {
+                \App\Models\UserProfile::updateOrCreate(
+                    ['user_id' => $user->id],
+                    $profileUpdate
+                );
+            }
+
+            // Update or create target goals
+            $goalUpdate = [];
+            if (array_key_exists('target_weight', $validated)) $goalUpdate['target_weight'] = $validated['target_weight'];
+            if (array_key_exists('daily_step_goal', $validated)) $goalUpdate['daily_step_goal'] = $validated['daily_step_goal'];
+            if (array_key_exists('supplement_recommendation', $validated)) $goalUpdate['supplement_recommendation'] = $validated['supplement_recommendation'];
+
+            if (!empty($goalUpdate)) {
+                $goalUpdate['profession_id'] = auth()->id();
+                $goalUpdate['is_active'] = true;
+
+                \App\Models\TargetGoal::updateOrCreate(
+                    ['user_id' => $user->id],
+                    $goalUpdate
+                );
+            }
+
+            // Ensure profession connection exists
+            \DB::table('connect_user_proffesions')->updateOrInsert(
+                [
+                    'profession_id' => auth()->id(),
+                    'user_id'       => $user->id,
+                ],
+                [
+                    'created_at'    => now(),
+                    'updated_at'    => now(),
+                ]
+            );
+
+            \DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Walk-in client profile updated successfully.',
+                'data'    => $user->load(['profile', 'targetGoals']),
+            ], 200);
+
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update client profile: ' . $e->getMessage(),
                 'error'   => $e->getMessage(),
             ], 500);
         }

@@ -460,12 +460,22 @@ public function assignUsers(Request $request)
                     'programs_sets.duration',
                     'programs_sets.primary_goal',
                     'programs_sets.target_intensity',
+                    'programs_sets.description',
+                    'programs_sets.description as workout_routine',
+                    'programs_sets.notes',
+                    'programs_sets.workout_types',
                     'creators.name as created_by',
                     'connect_to_professions.created_at as assigned_date'
                 )
                 ->get()
                 ->map(function($program) {
                     $program->assigned_date = \Carbon\Carbon::parse($program->assigned_date)->format('M d, Y');
+                    if (!empty($program->workout_types) && is_string($program->workout_types)) {
+                        $decoded = json_decode($program->workout_types, true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $program->workout_types = $decoded;
+                        }
+                    }
                     return $program;
                 });
 

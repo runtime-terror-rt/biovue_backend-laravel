@@ -348,6 +348,7 @@ Route::prefix('v1')->group(function () {
         Route::get('all-users-for-supplyer', [SupplyerController::class, 'userIndex']);
         Route::post('supplier/find-match', [SupplyerController::class, 'findMatchSupplements']);
         Route::post('supplier/walk-in-client', [SupplyerController::class, 'createWalkInClient']);
+        Route::match(['put', 'post'], 'supplier/walk-in-client/{id}', [SupplyerController::class, 'updateWalkInClient']);
         Route::post('supplier/notify-client', [SupplyerController::class, 'notifyClient']);
     
         Route::apiResource('partners', PartnerController::class)->except(['index']);

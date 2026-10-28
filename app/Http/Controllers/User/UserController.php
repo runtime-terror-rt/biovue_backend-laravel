@@ -1380,9 +1380,37 @@ class UserController extends Controller
                 $dayCal     = (float) $dayNutritions->sum('calories_value');
                 $adherence  = $targetCal > 0 && $dayNutritions->isNotEmpty() ? round(($dayCal / $targetCal) * 100) : 0;
 
+                $dayFoods = [];
+                foreach ($dayNutritions as $nutItem) {
+                    $fData = is_string($nutItem->foods ?? null) ? json_decode($nutItem->foods, true) : ($nutItem->foods ?? []);
+                    if (is_array($fData)) {
+                        foreach ($fData as $f) {
+                            if (is_string($f) && trim($f) !== '') {
+                                $dayFoods[] = [
+                                    'name'     => trim($f),
+                                    'calories' => null,
+                                    'protein'  => null,
+                                    'carbs'    => null,
+                                    'fat'      => null,
+                                ];
+                            } elseif (is_array($f)) {
+                                $dayFoods[] = [
+                                    'name'     => $f['name'] ?? ($f['food'] ?? ($f['item'] ?? 'Meal item')),
+                                    'calories' => $f['calories'] ?? ($f['calories_value'] ?? null),
+                                    'protein'  => $f['protein'] ?? ($f['protein_value'] ?? null),
+                                    'carbs'    => $f['carbs'] ?? ($f['carbs_value'] ?? null),
+                                    'fat'      => $f['fat'] ?? ($f['fat_value'] ?? null),
+                                ];
+                            }
+                        }
+                    }
+                }
+
                 $chartData[] = [
                     'label' => $date->format('D'), 
-                    'weight' => $actLog ? (float)$actLog->weight : null,
+                    'date' => $formattedDate,
+                    'formatted_date' => $date->format('M d'),
+                    'weight' => $actLog && (float)$actLog->weight > 0 ? (float)$actLog->weight : null,
                     'steps' => $actLog ? (int)$actLog->daily_steps : 0,
                     'sleep_hours' => $slpLog ? (float)$slpLog->sleep_hours : ($actLog ? (float)$actLog->sleep_hours : 0),
                     'hydration' => $rawHydrationGlasses,
@@ -1394,6 +1422,8 @@ class UserController extends Controller
                         'calories' => round($dayCal),
                         'calorie_percentage' => $adherence,
                         'adherence_pct' => $adherence,
+                        'target_calories' => round($targetCal),
+                        'foods' => $dayFoods,
                     ]
                 ];
             }
