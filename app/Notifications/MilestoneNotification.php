@@ -32,7 +32,7 @@ class MilestoneNotification extends Notification
 
     public function getTargetUrl(object $notifiable): string
     {
-        return ($notifiable->user_type === 'professional') ? '/trainer-dashboard/clients' : '/goals';
+        return ($notifiable->user_type === 'professional') ? '/trainer-dashboard/clients' : '/user-dashboard/goals';
     }
 
     public function toDatabase($notifiable)

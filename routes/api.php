@@ -120,7 +120,7 @@ Route::prefix('v1')->group(function () {
         Route::post('privacy-policy', [PrivacyPolicyController::class, 'save']);
         Route::post('/admin/privacy-policy', [PrivacyPolicyController::class, 'save']);
         Route::get('/admin/privacy-policy', [PrivacyPolicyController::class, 'show']);
-        Route::post('/payment/cancel', [PlanPaymentController::class, 'cancelSubscription']);
+        Route::match(['get', 'post'], '/payment/cancel', [PlanPaymentController::class, 'cancelSubscription']);
         //AI INsight part
         Route::post('/change-password', [ForgotPasswordController::class, 'changePassword']);
 

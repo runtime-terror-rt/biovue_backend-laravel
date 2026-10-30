@@ -111,7 +111,8 @@ class TargetGoalController extends Controller
                 }
             }
 
-            $goals = TargetGoal::where('user_id', $targetId)
+            $goals = TargetGoal::with('trainer:id,name,email,image')
+                ->where('user_id', $targetId)
                 ->where('is_active', true)
                 ->get();
 

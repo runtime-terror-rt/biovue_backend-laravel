@@ -29,7 +29,7 @@ class ReportController extends Controller
                 ->whereMonth('updated_at', now()->month)
                 ->count();
 
-            $churnRate = $subsAtStart > 0 ? ($lostThisMonth / $subsAtStart) * 100 : 3.4;
+            $churnRate = $subsAtStart > 0 ? round(($lostThisMonth / $subsAtStart) * 100, 1) : 0.0;
 
             $webVisits = DB::table('site_visits')->where('platform', 'web')->where('created_at', '>=', now()->subDays(30))->count();
             $appVisits = DB::table('site_visits')->where('platform', 'app')->where('created_at', '>=', now()->subDays(30))->count();
@@ -38,13 +38,21 @@ class ReportController extends Controller
                 ->select(
                     'plans.name',
                     'plans.plan_type',
-                    DB::raw('COUNT(plan_payments.id) as active_subscribers'),
+                    DB::raw('COUNT(CASE WHEN plan_payments.status = "paid" THEN plan_payments.id END) as active_subscribers'),
                     DB::raw('SUM(CASE WHEN plan_payments.status = "paid" THEN plan_payments.amount ELSE 0 END) as monthly_revenue'),
-                    DB::raw("CONCAT(ROUND(RAND() * 5, 1), '%') as churn_percentage") 
+                    DB::raw("CONCAT(ROUND(IF(COUNT(plan_payments.id) > 0, (COUNT(CASE WHEN plan_payments.status IN ('refunded', 'failed', 'expired') THEN 1 END) / COUNT(plan_payments.id)) * 100, 0), 1), '%') as churn_percentage")
                 )
                 ->leftJoin('plan_payments', 'plans.id', '=', 'plan_payments.plan_id')
                 ->groupBy('plans.id', 'plans.name', 'plans.plan_type')
                 ->get();
+
+            $individualProjections = \App\Models\Projection::whereHas('user', function ($q) {
+                $q->where('user_type', 'individual');
+            })->count();
+
+            $professionalProjections = \App\Models\Projection::whereHas('user', function ($q) {
+                $q->where('user_type', 'professional');
+            })->count();
 
             $months = collect(range(5, 0))->map(fn($i) => now()->subMonths($i)->format('M'));
             
@@ -76,8 +84,8 @@ class ReportController extends Controller
                     'churn_rate' => number_format($churnRate, 1) . '%',
                     'website_visits' => number_format($webVisits),
                     'app_visits' => number_format($appVisits),
-                    'projections_individual' => number_format(User::where('user_type', 'individual')->count() * 1.8),
-                    'projections_professional' => number_format(User::where('user_type', 'professional')->count() * 1.8),
+                    'projections_individual' => number_format($individualProjections),
+                    'projections_professional' => number_format($professionalProjections),
                 ],
                 'plan_table' => $planSummary,
                 'charts' => $charts

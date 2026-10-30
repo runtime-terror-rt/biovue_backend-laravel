@@ -19,6 +19,11 @@ class TargetGoal extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function trainer()
+    {
+        return $this->belongsTo(User::class, 'profession_id');
+    }
+
     protected $casts = [
         'supplement_recommendation' => 'array',
         'start_date' => 'date',

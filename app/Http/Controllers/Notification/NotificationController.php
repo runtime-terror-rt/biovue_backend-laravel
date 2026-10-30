@@ -164,9 +164,15 @@ class NotificationController extends Controller
                 return $isSupplier ? '/supplier-dashboard' : '/trainer-dashboard/overview';
             }
 
-            // Fix legacy '/goals' for professionals
-            if (str_contains($rawUrl, 'goals') && $userType === 'professional') {
-                return '/trainer-dashboard/clients';
+            // Fix legacy '/goals'
+            if (str_contains($rawUrl, 'goals')) {
+                return ($userType === 'professional') ? '/trainer-dashboard/clients' : '/user-dashboard/goals';
+            }
+
+            // Fix legacy '/user-programs' or '/programs' for clients
+            if (str_contains($rawUrl, 'user-programs')) {
+                $query = parse_url($rawUrl, PHP_URL_QUERY);
+                return '/user-dashboard/assigned-programs' . ($query ? '?' . $query : '');
             }
 
             // If it's already a valid specific URL (e.g. program query, etc.)
@@ -180,8 +186,8 @@ class NotificationController extends Controller
                 $userType === 'professional' => '/trainer-dashboard/messages',
                 default => '/user-dashboard/messages',
             },
-            'program_assigned' => !empty($data['program_id']) ? '/user-programs?program_id=' . $data['program_id'] : '/user-programs',
-            'goal_updates', 'goal_message', 'milestone_message' => ($userType === 'professional') ? '/trainer-dashboard/clients' : '/goals',
+            'program_assigned' => !empty($data['program_id']) ? '/user-dashboard/assigned-programs?program_id=' . $data['program_id'] : '/user-dashboard/assigned-programs',
+            'goal_updates', 'goal_message', 'milestone_message' => ($userType === 'professional') ? '/trainer-dashboard/clients' : '/user-dashboard/goals',
             'insight_msg' => '/insights',
             'schedule_created', 'schedule_updated', 'schedule_reminder', 'reminder_message' => ($userType === 'professional') ? '/trainer-dashboard/calendar' : '/calendar',
             'client_activity_log', 'habit_logged' => ($userType === 'professional') ? '/trainer-dashboard/clients' : '/user-dashboard',
@@ -211,7 +217,9 @@ class NotificationController extends Controller
         $isSupplier = ($professionType === 'supplement_supplier');
 
         if (!empty($data['program_id'])) {
-            return '/user-programs?program_id=' . $data['program_id'];
+            return ($userType === 'professional')
+                ? '/trainer-dashboard/programs/' . $data['program_id']
+                : '/user-dashboard/assigned-programs?program_id=' . $data['program_id'];
         }
 
         if (!empty($data['schedule_id'])) {
@@ -220,14 +228,16 @@ class NotificationController extends Controller
 
         $className = class_basename($notification->type ?? '');
         return match ($className) {
-            'ProgramAssignedNotification' => '/user-programs',
+            'ProgramAssignedNotification' => ($userType === 'professional')
+                ? '/trainer-dashboard/programs'
+                : '/user-dashboard/assigned-programs',
             'ScheduleNotification' => ($userType === 'professional') ? '/trainer-dashboard/calendar' : '/calendar',
             'CoachMessageNotification', 'ClientMessageNotification' => match(true) {
                 $isSupplier => '/supplier-dashboard/messages',
                 $userType === 'professional' => '/trainer-dashboard/messages',
                 default => '/user-dashboard/messages',
             },
-            'GoalUpdateNotification', 'MilestoneNotification' => ($userType === 'professional') ? '/trainer-dashboard/clients' : '/goals',
+            'GoalUpdateNotification', 'MilestoneNotification' => ($userType === 'professional') ? '/trainer-dashboard/clients' : '/user-dashboard/goals',
             'InsightNotification' => '/insights',
             'ReminderNotification' => ($userType === 'professional') ? '/trainer-dashboard/calendar' : '/calendar',
             'SubscriptionNotification' => match(true) {

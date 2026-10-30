@@ -241,7 +241,8 @@ class PlanPaymentController extends Controller
                         'meter_event_name' => $request->meter_event_name ?? null,
                     ],
                     'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
-                    'cancel_url'  => url('/api/v1/payment/cancel'),
+                    'cancel_url'  => 'https://biovuedigitalwellness.com/pricing?status=cancelled',
+                    'allow_promotion_codes' => true,
                 ]);
 
                 $payment->update([
@@ -314,7 +315,8 @@ class PlanPaymentController extends Controller
                     'meter_event_name' => $request->meter_event_name ?? null,
                 ],
                 'success_url' => 'https://biovuedigitalwellness.com/payment/show?session_id={CHECKOUT_SESSION_ID}',
-                'cancel_url'  => url('/api/v1/payment/cancel'),
+                'cancel_url'  => 'https://biovuedigitalwellness.com/pricing?status=cancelled',
+                'allow_promotion_codes' => true,
             ]);
 
             $payment->update([
@@ -698,6 +700,10 @@ class PlanPaymentController extends Controller
 
     public function cancelSubscription(Request $request)
     {
+        if ($request->isMethod('get')) {
+            return redirect('https://biovuedigitalwellness.com/pricing?status=cancelled');
+        }
+
         $user = auth()->user();
 
         // Professional: 6-month lock

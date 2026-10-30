@@ -32,7 +32,7 @@ class ProgramAssignedNotification extends Notification
 
     public function getTargetUrl($notifiable): string
     {
-        return '/user-programs?program_id=' . $this->program->id;
+        return '/user-dashboard/assigned-programs?program_id=' . $this->program->id;
     }
 
     public function toDatabase($notifiable)
@@ -43,9 +43,9 @@ class ProgramAssignedNotification extends Notification
             'message' => "A new program '{$this->program->name}' has been assigned to you.",
             'program_id' => $this->program->id,
             'program_name' => $this->program->name,
-            'url' => '/user-programs?program_id=' . $this->program->id,
-            'action_url' => '/user-programs?program_id=' . $this->program->id,
-            'link' => '/user-programs?program_id=' . $this->program->id,
+            'url' => '/user-dashboard/assigned-programs?program_id=' . $this->program->id,
+            'action_url' => '/user-dashboard/assigned-programs?program_id=' . $this->program->id,
+            'link' => '/user-dashboard/assigned-programs?program_id=' . $this->program->id,
         ];
     }
 }

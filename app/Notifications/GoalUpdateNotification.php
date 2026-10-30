@@ -32,18 +32,20 @@ class GoalUpdateNotification extends Notification
 
     public function getTargetUrl(object $notifiable): string
     {
-        return '/goals';
+        return ($notifiable->user_type === 'professional') ? '/trainer-dashboard/clients' : '/user-dashboard/goals';
     }
 
     public function toDatabase($notifiable)
     {
+        $url = $this->getTargetUrl($notifiable);
+
         return [
             'title' => $this->title,
             'message' => $this->message,
             'type' => $this->type,
-            'url' => '/goals',
-            'action_url' => '/goals',
-            'link' => '/goals',
+            'url' => $url,
+            'action_url' => $url,
+            'link' => $url,
         ];
     }
 }
