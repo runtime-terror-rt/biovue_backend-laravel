@@ -113,15 +113,60 @@ class TargetGoalController extends Controller
 
             $goals = TargetGoal::with('trainer:id,name,email,image')
                 ->where('user_id', $targetId)
-                ->where('is_active', true)
+                ->orderByDesc('is_active')
+                ->latest()
                 ->get();
 
-            $macros = \App\Models\AdjustProgram::where('user_id', $targetId)
-                ->select('calories', 'protein', 'carbs', 'fat')
-                ->first();
+            $adjust = \App\Models\AdjustProgram::where('user_id', $targetId)->first();
+
+            // If TargetGoal is empty but AdjustProgram has targets configured, synthesize/sync
+            if ($goals->isEmpty() && $adjust) {
+                $trainerId = $adjust->profession_id ?: DB::table('connect_user_proffesions')
+                    ->where('user_id', $targetId)
+                    ->value('profession_id');
+
+                $sleepVal = 8;
+                if (!empty($adjust->sleep_target_range)) {
+                    $parts = explode('-', $adjust->sleep_target_range);
+                    $sleepVal = is_numeric($parts[0]) ? (float) $parts[0] : 8;
+                }
+
+                $newGoal = TargetGoal::updateOrCreate(
+                    ['user_id' => $targetId],
+                    [
+                        'profession_id'       => $trainerId,
+                        'target_weight'       => $adjust->target_weight,
+                        'weekly_workout_goal' => is_numeric($adjust->weekly_workouts) ? (int)$adjust->weekly_workouts : 3,
+                        'daily_step_goal'     => 10000,
+                        'sleep_target'        => $sleepVal,
+                        'water_target'        => $adjust->hydration_target ? round((float)$adjust->hydration_target * 4) : 8,
+                        'calories'            => $adjust->calories,
+                        'protein'             => $adjust->protein,
+                        'carbs'               => $adjust->carbs,
+                        'fat'                 => $adjust->fat,
+                        'supplement_notes'    => $adjust->note,
+                        'is_active'           => true,
+                        'start_date'          => $adjust->created_at ?? now(),
+                        'end_date'            => $adjust->updated_at ? $adjust->updated_at->addMonths(3) : now()->addMonths(3),
+                    ]
+                );
+
+                $goals = TargetGoal::with('trainer:id,name,email,image')
+                    ->where('id', $newGoal->id)
+                    ->get();
+            }
+
+            $macros = $adjust ? (object)[
+                'calories' => $adjust->calories,
+                'protein'  => $adjust->protein,
+                'carbs'    => $adjust->carbs,
+                'fat'      => $adjust->fat,
+            ] : null;
 
             $goals->transform(function ($g) use ($macros) {
-                $g->macros = $macros;
+                if (!$g->macros && $macros) {
+                    $g->macros = $macros;
+                }
                 return $g;
             });
 

@@ -44,12 +44,40 @@ class AdjustProgramController extends Controller
             ])
         );
 
+        // Keep TargetGoal in sync so client dashboard displays the updated goals
+        try {
+            $parts = !empty($validated['sleep_target_range']) ? explode('-', $validated['sleep_target_range']) : [];
+            $sleepNum = isset($parts[0]) && is_numeric($parts[0]) ? (float)$parts[0] : 8;
+
+            \App\Models\TargetGoal::updateOrCreate(
+                ['user_id' => $validated['user_id']],
+                [
+                    'profession_id'       => $authUser->id,
+                    'target_weight'       => $validated['target_weight'] ?? null,
+                    'weekly_workout_goal' => is_numeric($validated['weekly_workouts'] ?? null) ? (int)$validated['weekly_workouts'] : null,
+                    'sleep_target'        => $sleepNum,
+                    'water_target'        => isset($validated['hydration_target']) ? round((float)$validated['hydration_target'] * 4) : null,
+                    'calories'            => $validated['calories'] ?? null,
+                    'protein'             => $validated['protein'] ?? null,
+                    'carbs'               => $validated['carbs'] ?? null,
+                    'fat'                 => $validated['fat'] ?? null,
+                    'supplement_notes'    => $validated['note'] ?? null,
+                    'is_active'           => true,
+                ]
+            );
+        } catch (\Exception $e) {
+            \Log::warning('Could not sync TargetGoal from AdjustProgram: ' . $e->getMessage());
+        }
+
         $client = \App\Models\User::find($validated['user_id']);
-        $client->sendUserNotify('goal_updates', [
-            'title' => 'Program Adjusted',
-            'message' => 'Your coach has updated your program settings.',
-            'url' => '/program-details'
-        ]);
+        if ($client) {
+            $client->sendUserNotify('goal_updates', [
+                'title' => 'Program Adjusted',
+                'message' => 'Your coach has updated your fitness targets and goals.',
+                'url' => '/user-dashboard/goals',
+                'action_url' => '/user-dashboard/goals'
+            ]);
+        }
 
         return response()->json([
             'success' => true,

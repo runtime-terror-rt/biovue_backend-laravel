@@ -31,25 +31,47 @@ class DashboardController extends Controller
 
             
 
-            $userGrowth = User::select(
+            $months = collect(range(5, 0))->map(fn($i) => now()->subMonths($i)->format('M'));
+
+            $userGroup = User::select(
                 DB::raw('count(id) as count'), 
                 DB::raw("DATE_FORMAT(created_at, '%b') as month"))
                 ->where('created_at', '>=', now()->subMonths(6))
                 ->groupBy('month')
-                ->orderBy(DB::raw("MIN(created_at)"), 'ASC')
-                ->get();
+                ->get()
+                ->keyBy('month');
 
-            $revenueTrend = DB::table('plan_payments')->select(DB::raw('sum(amount) as amount'), DB::raw("DATE_FORMAT(created_at, '%b') as month"))
-                ->where('status', 'paid')->where('created_at', '>=', now()->subMonths(6))
-                ->groupBy('month')->orderBy(DB::raw("MIN(created_at)"), 'ASC')->get();
+            $userGrowth = $months->map(function ($month) use ($userGroup) {
+                return [
+                    'month' => $month,
+                    'count' => $userGroup->get($month)->count ?? 0,
+                ];
+            });
 
-            $planSummary = DB::table('plan_payments')
-                ->join('users', 'plan_payments.user_id', '=', 'users.id')
-                ->select('users.user_type', 
-                    DB::raw('count(plan_payments.id) as active_subscribers'), 
-                    DB::raw('sum(plan_payments.amount) as monthly_revenue'))
-                ->where('plan_payments.status', 'paid')
-                ->groupBy('users.user_type')
+            $revenueGroup = DB::table('plan_payments')
+                ->select(DB::raw('sum(amount) as amount'), DB::raw("DATE_FORMAT(created_at, '%b') as month"))
+                ->where('status', 'paid')
+                ->where('created_at', '>=', now()->subMonths(6))
+                ->groupBy('month')
+                ->get()
+                ->keyBy('month');
+
+            $revenueTrend = $months->map(function ($month) use ($revenueGroup) {
+                return [
+                    'month' => $month,
+                    'amount' => (float)($revenueGroup->get($month)->amount ?? 0),
+                ];
+            });
+
+            $planSummary = DB::table('plans')
+                ->select(
+                    'plans.name as plan_name',
+                    'plans.plan_type',
+                    DB::raw('COUNT(CASE WHEN plan_payments.status = "paid" THEN plan_payments.id END) as active_subscribers'),
+                    DB::raw('CONCAT("$", FORMAT(COALESCE(SUM(CASE WHEN plan_payments.status = "paid" THEN plan_payments.amount ELSE 0 END), 0), 2)) as monthly_revenue')
+                )
+                ->leftJoin('plan_payments', 'plans.id', '=', 'plan_payments.plan_id')
+                ->groupBy('plans.id', 'plans.name', 'plans.plan_type')
                 ->get();
 
             return response()->json([

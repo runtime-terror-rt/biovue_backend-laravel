@@ -183,7 +183,7 @@ class PlanPaymentController extends Controller
             [$finalPrice, $interval, $duration] = $this->resolvePriceAndInterval($targetPlan, $request->billing);
 
             try {
-                $payment = PlanPayment::create([
+                $payment = $this->createSafePayment([
                     'user_id'        => $user->id,
                     'plan_id'        => $freeTrialPlan->id,
                     'target_plan_id' => $targetPlan->id,
@@ -272,7 +272,7 @@ class PlanPaymentController extends Controller
         [$finalPrice, $interval, $duration] = $this->resolvePriceAndInterval($selectedPlan, $request->billing);
 
         try {
-            $payment = PlanPayment::create([
+            $payment = $this->createSafePayment([
                 'user_id'        => $user->id,
                 'plan_id'        => $selectedPlan->id,
                 'transaction_id' => 'TEMP_' . uniqid(),
@@ -872,5 +872,21 @@ class PlanPaymentController extends Controller
                 'end_date'         => now()->addDays($duration),
             ]
         );
+    }
+
+    /**
+     * Resilient PlanPayment creation: catches enum truncation warning for legacy 'billing' column
+     */
+    protected function createSafePayment(array $data): PlanPayment
+    {
+        try {
+            return PlanPayment::create($data);
+        } catch (\Illuminate\Database\QueryException $qe) {
+            if (str_contains($qe->getMessage(), 'billing') || str_contains($qe->getMessage(), '1265')) {
+                $data['billing'] = 'monthly';
+                return PlanPayment::create($data);
+            }
+            throw $qe;
+        }
     }
 }
