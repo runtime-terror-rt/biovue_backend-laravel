@@ -450,6 +450,8 @@ public function assignUsers(Request $request)
                 }
             }
 
+            $adjustProgram = \App\Models\AdjustProgram::where('user_id', $targetUserId)->first();
+
             $userPrograms = DB::table('connect_to_professions')
                 ->where('connect_to_professions.user_id', $targetUserId)
                 ->join('programs_sets', 'connect_to_professions.program_set_id', '=', 'programs_sets.id')
@@ -464,11 +466,18 @@ public function assignUsers(Request $request)
                     'programs_sets.description as workout_routine',
                     'programs_sets.notes',
                     'programs_sets.workout_types',
+                    'programs_sets.calories',
+                    'programs_sets.protein',
+                    'programs_sets.carbs',
+                    'programs_sets.fat',
+                    'programs_sets.supplement_recommendation',
+                    'programs_sets.weekly_targets',
                     'creators.name as created_by',
+                    'creators.email as trainer_email',
                     'connect_to_professions.created_at as assigned_date'
                 )
                 ->get()
-                ->map(function($program) {
+                ->map(function($program) use ($adjustProgram) {
                     $program->assigned_date = \Carbon\Carbon::parse($program->assigned_date)->format('M d, Y');
                     if (!empty($program->workout_types) && is_string($program->workout_types)) {
                         $decoded = json_decode($program->workout_types, true);
@@ -476,10 +485,37 @@ public function assignUsers(Request $request)
                             $program->workout_types = $decoded;
                         }
                     }
+                    if (!empty($program->supplement_recommendation) && is_string($program->supplement_recommendation)) {
+                        $decodedSupp = json_decode($program->supplement_recommendation, true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $program->supplement_recommendation = $decodedSupp;
+                        }
+                    }
+                    if (!empty($program->weekly_targets) && is_string($program->weekly_targets)) {
+                        $decodedTargets = json_decode($program->weekly_targets, true);
+                        if (json_last_error() === JSON_ERROR_NONE) {
+                            $program->weekly_targets = $decodedTargets;
+                        }
+                    }
+
+                    // Fallback to client personalized adjustments if program fields are empty
+                    if (empty($program->workout_routine) && !empty($adjustProgram?->programs)) {
+                        $program->workout_routine = is_string($adjustProgram->programs)
+                            ? $adjustProgram->programs
+                            : json_encode($adjustProgram->programs, JSON_PRETTY_PRINT);
+                    }
+                    if (empty($program->notes) && !empty($adjustProgram?->note)) {
+                        $program->notes = $adjustProgram->note;
+                    }
+                    if (empty($program->calories) && !empty($adjustProgram?->calories)) {
+                        $program->calories = $adjustProgram->calories;
+                        $program->protein = $adjustProgram->protein;
+                        $program->carbs = $adjustProgram->carbs;
+                        $program->fat = $adjustProgram->fat;
+                    }
+
                     return $program;
                 });
-
-            $adjustProgram = \App\Models\AdjustProgram::where('user_id', $targetUserId)->first();
             $recentNotes = \DB::table('profession_notes')
                 ->where('user_id', $targetUserId)
                 ->select('id', 'note', 'created_at')
