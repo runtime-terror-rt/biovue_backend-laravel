@@ -19,30 +19,45 @@ class TargetGoalController extends Controller
         $authUserId = Auth::id();
         $authUser = Auth::user();
 
-        if ($authUser->user_type !== 'professional' || $authUser->profession_type !== 'trainer_coach') {
+        $isAuthorized = ($authUser->user_type === 'professional' || $authUser->user_type === 'admin');
+        if (!$isAuthorized) {
+            $isAuthorized = DB::table('connect_user_proffesions')
+                ->where('profession_id', $authUserId)
+                ->where('user_id', $request->input('user_id'))
+                ->exists();
+        }
+
+        if (!$isAuthorized) {
             return response()->json([
                 'success' => false,
-                'message' => 'Unauthorized. Only trainer coaches can set goals for clients.'
+                'message' => 'Unauthorized. Only trainer coaches and connected professionals can set goals for clients.'
             ], 403);
         }
 
         $validated = $request->validate([
             'user_id'                   => 'required|exists:users,id',
             'target_weight'             => 'nullable|numeric|between:0,999.99',
-            'weekly_workout_goal'       => 'nullable|integer|min:1|max:7',
-            'daily_step_goal'           => 'nullable|integer|min:0',
+            'weekly_workout_goal'       => 'nullable|numeric|min:1|max:7',
+            'daily_step_goal'           => 'nullable|numeric|min:0',
             'sleep_target'              => 'nullable|numeric|between:0,24',
             'start_date'                => 'nullable|date',
-            'end_date'                  => 'nullable|date|after_or_equal:start_date',
-            'water_target'              => 'nullable|integer',
+            'end_date'                  => 'nullable|date',
+            'water_target'              => 'nullable|numeric|min:0',
             'supplement_recommendation' => 'nullable|array',
-            'calories'                  => 'nullable|integer|min:0',
-            'protein'                   => 'nullable|integer|min:0',
-            'carbs'                     => 'nullable|integer|min:0',
-            'fat'                       => 'nullable|integer|min:0',
+            'calories'                  => 'nullable|numeric|min:0',
+            'protein'                   => 'nullable|numeric|min:0',
+            'carbs'                     => 'nullable|numeric|min:0',
+            'fat'                       => 'nullable|numeric|min:0',
         ]);
 
         $goalFields = collect($validated)->except(['calories', 'protein', 'carbs', 'fat'])->toArray();
+
+        if (empty($goalFields['start_date'])) {
+            $goalFields['start_date'] = now()->toDateString();
+        }
+        if (empty($goalFields['end_date'])) {
+            $goalFields['end_date'] = now()->addMonths(3)->toDateString();
+        }
 
         $goal = TargetGoal::updateOrCreate(
             ['user_id' => $validated['user_id']],
@@ -52,16 +67,18 @@ class TargetGoalController extends Controller
             ])
         );
 
-        // Sync client macros to AdjustProgram if provided
-        $macroData = array_filter([
-            'calories' => $request->input('calories') ?? $request->input('target_calories'),
-            'protein'  => $request->input('protein') ?? $request->input('protein_target'),
-            'carbs'    => $request->input('carbs') ?? $request->input('carbs_target'),
-            'fat'      => $request->input('fat') ?? $request->input('fat_target'),
+        // Sync client macros, workout routine, and notes to AdjustProgram if provided
+        $adjustFields = array_filter([
+            'calories'      => $request->input('calories') ?? $request->input('target_calories'),
+            'protein'       => $request->input('protein') ?? $request->input('protein_target'),
+            'carbs'         => $request->input('carbs') ?? $request->input('carbs_target'),
+            'fat'           => $request->input('fat') ?? $request->input('fat_target'),
+            'programs'      => $request->input('workout_routine') ?? $request->input('programs'),
+            'note'          => $request->input('supplement_notes') ?? $request->input('note'),
         ], fn($v) => !is_null($v));
 
-        if (!empty($macroData)) {
-            $adjustData = array_merge($macroData, [
+        if (!empty($adjustFields)) {
+            $adjustData = array_merge($adjustFields, [
                 'profession_id' => $authUserId ?: ($goal->profession_id ?? null),
             ]);
             \App\Models\AdjustProgram::updateOrCreate(
@@ -103,7 +120,7 @@ class TargetGoalController extends Controller
                     ->where('user_id', $targetId)
                     ->exists();
 
-                if (!$isConnected && $loggedInUser->user_type !== 'professional') {
+                if (!$isConnected && $loggedInUser->user_type !== 'professional' && $loggedInUser->user_type !== 'admin') {
                     return response()->json([
                         'success' => false,
                         'message' => 'Unauthorized: You do not have permission to view this goal.'
@@ -163,9 +180,35 @@ class TargetGoalController extends Controller
                 'fat'      => $adjust->fat,
             ] : null;
 
-            $goals->transform(function ($g) use ($macros) {
+            $connectedTrainer = null;
+            $trainerUserId = DB::table('connect_user_proffesions')
+                ->where('user_id', $targetId)
+                ->value('profession_id')
+                ?: DB::table('connect_to_professions')
+                    ->where('connect_to_professions.user_id', $targetId)
+                    ->join('programs_sets', 'connect_to_professions.program_set_id', '=', 'programs_sets.id')
+                    ->value('programs_sets.profession_id');
+
+            if ($trainerUserId) {
+                $connectedTrainer = \App\Models\User::where('id', $trainerUserId)
+                    ->select('id', 'name', 'email', 'image')
+                    ->first();
+            }
+
+            $goals->transform(function ($g) use ($macros, $adjust, $connectedTrainer) {
                 if (!$g->macros && $macros) {
                     $g->macros = $macros;
+                }
+                if (!$g->trainer && $connectedTrainer) {
+                    $g->trainer = $connectedTrainer;
+                }
+                if ($adjust) {
+                    if (!$g->workout_routine && !empty($adjust->programs)) {
+                        $g->workout_routine = $adjust->programs;
+                    }
+                    if (!$g->supplement_notes && !empty($adjust->note)) {
+                        $g->supplement_notes = $adjust->note;
+                    }
                 }
                 return $g;
             });
