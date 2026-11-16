@@ -68,8 +68,12 @@ class SleepController extends Controller
             $days = 7;
         }
 
-        $endDate = Carbon::now()->endOfDay();
-        $startDate = Carbon::now()->subDays($days - 1)->startOfDay();
+        $user = \App\Models\User::find($id);
+        $userTimezone = \App\Services\TimezoneService::resolveUserTimezone($user, $request);
+        $nowInUserTz  = \Carbon\Carbon::now($userTimezone);
+
+        $endDate   = $nowInUserTz->copy()->endOfDay();
+        $startDate = $nowInUserTz->copy()->subDays($days - 1)->startOfDay();
 
         $sleepLogs = DB::table('sleep_logs')
             ->where('user_id', $id)

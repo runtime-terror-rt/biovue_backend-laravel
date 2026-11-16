@@ -61,7 +61,7 @@ class LoginController extends Controller
             $hasTrainerConnection = DB::table('connect_user_proffesions')->where('user_id', $user->id)->exists()
                 || DB::table('connect_to_professions')->where('user_id', $user->id)->exists();
             $isInvitedOrConnected = (bool)$user->is_invited || $hasTrainerConnection;
-            $effectivePlanName = $user->plan ? $user->plan->name : ($isInvitedOrConnected ? 'Client Access' : null);
+            $effectivePlanName = $user->plan ? $user->plan->name : ($isInvitedOrConnected ? 'Premium' : null);
 
             return response()->json([
                 'success' => true,

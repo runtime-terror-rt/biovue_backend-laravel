@@ -165,8 +165,12 @@ class ActivityController extends Controller
             $days = 7;
         }
 
-        $endDate = Carbon::today();
-        $startDate = Carbon::today()->subDays($days - 1);
+        $user = \App\Models\User::find($id);
+        $userTimezone = \App\Services\TimezoneService::resolveUserTimezone($user, $request);
+        $nowInUserTz  = \Carbon\Carbon::now($userTimezone);
+
+        $endDate   = $nowInUserTz->copy()->endOfDay();
+        $startDate = $nowInUserTz->copy()->subDays($days - 1)->startOfDay();
 
         $logs = ActivityLog::where('user_id', $id)
             ->whereBetween('log_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])

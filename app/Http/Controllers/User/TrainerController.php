@@ -108,6 +108,21 @@ class TrainerController extends Controller
             $projectionLimit = $creditRecord?->projection_limit ?? 10;
             $daysUntilReset = max(1, now()->endOfMonth()->diffInDays(now()));
 
+            $adjustProgram = \App\Models\AdjustProgram::where('user_id', $userId)->first();
+            $recentTrainerNotes = \DB::table('profession_notes')
+                ->where('user_id', $userId)
+                ->orderBy('created_at', 'desc')
+                ->take(5)
+                ->get();
+
+            $calVal = (int)($adjustProgram?->calories ?? 0);
+            $pVal   = (int)($adjustProgram?->protein ?? 0);
+            $cVal   = (int)($adjustProgram?->carbs ?? 0);
+            $fVal   = (int)($adjustProgram?->fat ?? 0);
+            $pPct   = $calVal > 0 ? round((($pVal * 4) / $calVal) * 100, 1) : 0;
+            $cPct   = $calVal > 0 ? round((($cVal * 4) / $calVal) * 100, 1) : 0;
+            $fPct   = $calVal > 0 ? round((($fVal * 9) / $calVal) * 100, 1) : 0;
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -132,6 +147,29 @@ class TrainerController extends Controller
                     'projection_usage' => [
                         'used' => "{$projectionsCount}/{$projectionLimit}",
                         'reset_days' => "Next reset: {$daysUntilReset} days"
+                    ],
+                    'macros' => [
+                        'calories'           => $calVal,
+                        'protein'            => $pVal,
+                        'carbs'              => $cVal,
+                        'fat'                => $fVal,
+                        'protein_percentage' => $pPct,
+                        'carbs_percentage'   => $cPct,
+                        'fat_percentage'     => $fPct,
+                    ],
+                    'adjust_program' => [
+                        'programs'           => $adjustProgram?->programs,
+                        'note'               => $adjustProgram?->note,
+                        'primary_focus_area' => $adjustProgram?->primary_focus_area,
+                        'calories'           => $calVal,
+                        'protein'            => $pVal,
+                        'carbs'              => $cVal,
+                        'fat'                => $fVal,
+                    ],
+                    'comment_boxes' => [
+                        'trainer_note'       => $adjustProgram?->note,
+                        'workout_programs'   => $adjustProgram?->programs,
+                        'recent_notes'       => $recentTrainerNotes,
                     ]
                 ]
             ]);

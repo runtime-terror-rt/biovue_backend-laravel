@@ -20,8 +20,12 @@ class HydrationReportController extends Controller
                 $days = 7; 
             }
 
-            $endDate = now()->format('Y-m-d');
-            $startDate = now()->subDays($days - 1)->format('Y-m-d');
+            $user = \App\Models\User::find($id);
+            $userTimezone = \App\Services\TimezoneService::resolveUserTimezone($user, $request);
+            $nowInUserTz  = \Carbon\Carbon::now($userTimezone);
+
+            $endDate = $nowInUserTz->format('Y-m-d');
+            $startDate = $nowInUserTz->copy()->subDays($days - 1)->format('Y-m-d');
 
             // ২. ডাটাবেস থেকে হাইড্রেশন লগ নিয়ে আসা
             $hydrationData = DB::table('hydration_logs')

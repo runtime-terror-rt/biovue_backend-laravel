@@ -54,6 +54,7 @@ class UserProfileController extends Controller
             'weight'           => 'nullable',
             'location'         => 'nullable|string|max:255',
             'zipcode'          => 'nullable|string|max:20',
+            'timezone'         => 'nullable|string|max:64',
             'bio'              => 'nullable|string',
             'specialties'      => 'nullable|array',
             'services'         => 'nullable|array',
@@ -114,6 +115,16 @@ class UserProfileController extends Controller
 
         if ($request->filled('unit_system') && empty($validated['unit'])) {
             $validated['unit'] = $request->input('unit_system');
+        }
+
+        // Auto-resolve timezone if not provided
+        if (empty($validated['timezone'])) {
+            if (!empty($validated['zipcode'])) {
+                $validated['timezone'] = \App\Services\TimezoneService::resolveByZipcode($validated['zipcode']);
+            }
+            if (empty($validated['timezone']) && !empty($validated['location'])) {
+                $validated['timezone'] = \App\Services\TimezoneService::resolveByLocation($validated['location']);
+            }
         }
 
         $profileData = collect($validated)->except(array_merge(['user_id', 'name', 'user_type', 'profession_type', 'unit_system'], $medicalFields))->toArray();
@@ -351,6 +362,12 @@ class UserProfileController extends Controller
 
         $isCancelled = $latestPayment && in_array($latestPayment->status, ['pending_cancellation', 'cancelled']);
 
+        // Check trainer connection for invited clients
+        $hasTrainerConnection = \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
+            ->where('user_id', $user->id)
+            ->exists();
+        $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
+
         $countdownExpiredAt = null;
         $showCountdown = false;
 
@@ -358,8 +375,8 @@ class UserProfileController extends Controller
             // For canceled subscription, countdown reflects remaining access period (monthly/yearly)
             $countdownExpiredAt = $latestPayment->end_date->toIso8601String();
             $showCountdown = true;
-        } elseif ($activePaidSub) {
-            // Active paid membership: MUST NOT display expiration countdown clock
+        } elseif ($activePaidSub || $isInvited) {
+            // Active paid membership OR client under a trainer: MUST NOT display expiration countdown clock
             $countdownExpiredAt = null;
             $showCountdown = false;
         } elseif ($isFreeTrial || !$userPlan || str_contains($planName, 'free')) {
@@ -373,15 +390,10 @@ class UserProfileController extends Controller
         $isPremium = str_contains($planName, 'premium');
         $isPlus    = str_contains($planName, 'plus');
 
-        // Check trainer connection for invited clients
-        $hasTrainerConnection = \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
-            ->where('user_id', $user->id)
-            ->exists();
-        $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
-
-        // If user has no personal paid plan but is an invited client, grant Plus-tier feature permissions
-        if (!$isPremium && !$isPlus && $isInvited) {
-            $isPlus = true;
+        // If user is an invited client under a trainer, grant Premium-tier access
+        if ($isInvited) {
+            $isPremium = true;
+            $isPlus    = true;
         }
 
         $allowedTimeframes = ['1_year'];
@@ -435,7 +447,7 @@ class UserProfileController extends Controller
             'is_cancelled'         => $isCancelled,
             'is_trial'             => $isFreeTrial,
             'has_active_paid'      => $activePaidSub,
-            'plan_name'            => $userPlan?->name ?? ($isInvited ? 'Client Access' : 'Free Trial'),
+            'plan_name'            => $userPlan?->name ?? ($isInvited ? 'Premium' : 'Free Trial'),
             'allowed_timeframes'   => $allowedTimeframes,
             'allowed_resolutions'  => $allowedResolutions,
             'can_access_5_year'    => $isPremium,

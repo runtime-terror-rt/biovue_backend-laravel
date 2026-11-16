@@ -128,13 +128,21 @@ class NutritionController extends Controller
         $userId = $request->query('user_id') ?: ($request->query('client_id') ?: auth()->id());
         $type = $request->query('type', 'weekly');
 
-        $endDate   = Carbon::today();
-        $startDate = $this->getStartDate($type);
+        $user = \App\Models\User::with('profile')->find($userId);
+        $userTimezone = \App\Services\TimezoneService::resolveUserTimezone($user, $request);
+
+        $nowInUserTz = Carbon::now($userTimezone);
+        $endDate   = $nowInUserTz->copy()->endOfDay();
+        $startDate = match($type) {
+            'monthly'  => $nowInUserTz->copy()->subDays(29)->startOfDay(),
+            '3_months' => $nowInUserTz->copy()->subMonths(3)->addDay()->startOfDay(),
+            default    => $nowInUserTz->copy()->subDays(6)->startOfDay(),
+        };
 
         $groupedLogs = UserNutritionCalculate::where('user_id', $userId)
             ->where(function($q) use ($startDate, $endDate) {
                 $q->whereBetween('log_date', [$startDate->toDateString(), $endDate->toDateString()])
-                  ->orWhereBetween('created_at', [$startDate->toDateString() . ' 00:00:00', $endDate->toDateString() . ' 23:59:59']);
+                  ->orWhereBetween('created_at', [$startDate->toDateTimeString(), $endDate->toDateTimeString()]);
             })
             ->get()
             ->groupBy(function($item) {
@@ -146,14 +154,27 @@ class NutritionController extends Controller
         $adjustProgram = \App\Models\AdjustProgram::where('user_id', $userId)->first();
         $targetGoal    = \App\Models\TargetGoal::where('user_id', $userId)->where('is_active', true)->first();
 
-        $targetCalories = (float)(
-            $adjustProgram->calories 
-            ?? $targetGoal->target_calories 
-            ?? 2000
-        );
-        $targetProtein = (float)($adjustProgram->protein ?? ($targetGoal->protein_target ?? 0));
-        $targetCarbs   = (float)($adjustProgram->carbs ?? ($targetGoal->carbs_target ?? 0));
-        $targetFat     = (float)($adjustProgram->fat ?? ($targetGoal->fat_target ?? 0));
+        // Coach-assigned macros unconditionally override AI suggestions/target goals
+        $hasCoachCalories = !empty($adjustProgram?->calories) && (float)$adjustProgram->calories > 0;
+        $targetCalories = $hasCoachCalories 
+            ? (float)$adjustProgram->calories 
+            : (float)($targetGoal?->calories ?? ($targetGoal?->target_calories ?? 2000));
+
+        $targetProtein = (!empty($adjustProgram?->protein) && (float)$adjustProgram->protein > 0)
+            ? (float)$adjustProgram->protein
+            : (float)($targetGoal?->protein ?? ($targetGoal?->protein_target ?? 0));
+
+        $targetCarbs = (!empty($adjustProgram?->carbs) && (float)$adjustProgram->carbs > 0)
+            ? (float)$adjustProgram->carbs
+            : (float)($targetGoal?->carbs ?? ($targetGoal?->carbs_target ?? 0));
+
+        $targetFat = (!empty($adjustProgram?->fat) && (float)$adjustProgram->fat > 0)
+            ? (float)$adjustProgram->fat
+            : (float)($targetGoal?->fat ?? ($targetGoal?->fat_target ?? 0));
+
+        $targetProPct = $targetCalories > 0 ? round((($targetProtein * 4) / $targetCalories) * 100, 1) : 0;
+        $targetCrbPct = $targetCalories > 0 ? round((($targetCarbs * 4) / $targetCalories) * 100, 1) : 0;
+        $targetFatPct = $targetCalories > 0 ? round((($targetFat * 9) / $targetCalories) * 100, 1) : 0;
 
         $chartData = $this->generateNutritionChart($type, $startDate, $endDate, $groupedLogs, $targetCalories);
 
@@ -171,8 +192,8 @@ class NutritionController extends Controller
         $totalCarbs   = round($groupedLogs->flatten()->sum('carbs_value'), 1);
         $totalFat     = round($groupedLogs->flatten()->sum('fat_value'), 1);
 
-        // Current day calorie intake total box (over / under calculation)
-        $todayDateStr  = Carbon::today()->format('Y-m-d');
+        // Current day calorie intake total box (over / under calculation in user timezone)
+        $todayDateStr  = $nowInUserTz->format('Y-m-d');
         $todayLogs     = $groupedLogs->get($todayDateStr);
         $todayCalories = $todayLogs ? (float)$todayLogs->sum('calories_value') : 0.0;
         $diff          = $todayCalories - $targetCalories;
@@ -213,13 +234,17 @@ class NutritionController extends Controller
                 'chart_data'              => $chartData,
                 'current_day_calorie_box' => $currentDayCalorieBox,
                 'target_macros'           => [
-                    'calories'       => round($targetCalories),
-                    'protein'        => round($targetProtein),
-                    'carbs'          => round($targetCarbs),
-                    'fat'            => round($targetFat),
-                    'protein_target' => $targetProtein > 0 ? ($targetProtein . "g") : null,
-                    'carbs_target'   => $targetCarbs > 0 ? ($targetCarbs . "g") : null,
-                    'fat_target'     => $targetFat > 0 ? ($targetFat . "g") : null,
+                    'calories'           => round($targetCalories),
+                    'protein'            => round($targetProtein),
+                    'carbs'              => round($targetCarbs),
+                    'fat'                => round($targetFat),
+                    'protein_percentage' => $targetProPct,
+                    'carbs_percentage'   => $targetCrbPct,
+                    'fat_percentage'     => $targetFatPct,
+                    'protein_target'     => $targetProtein > 0 ? ($targetProtein . "g") : null,
+                    'carbs_target'       => $targetCarbs > 0 ? ($targetCarbs . "g") : null,
+                    'fat_target'         => $targetFat > 0 ? ($targetFat . "g") : null,
+                    'is_coach_assigned'  => $hasCoachCalories,
                 ],
                 'macro_totals' => [
                     'protein'       => $totalProtein . "g",

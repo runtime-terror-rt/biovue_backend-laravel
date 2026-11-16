@@ -498,19 +498,25 @@ public function assignUsers(Request $request)
                         }
                     }
 
-                    // Fallback to client personalized adjustments if program fields are empty
-                    if (empty($program->workout_routine) && !empty($adjustProgram?->programs)) {
+                    // Coach personalized adjustments OVERRIDE program template fields
+                    if (!empty($adjustProgram?->programs)) {
                         $program->workout_routine = is_string($adjustProgram->programs)
                             ? $adjustProgram->programs
                             : json_encode($adjustProgram->programs, JSON_PRETTY_PRINT);
                     }
-                    if (empty($program->notes) && !empty($adjustProgram?->note)) {
+                    if (!empty($adjustProgram?->note)) {
                         $program->notes = $adjustProgram->note;
                     }
-                    if (empty($program->calories) && !empty($adjustProgram?->calories)) {
+                    if (!empty($adjustProgram?->calories)) {
                         $program->calories = $adjustProgram->calories;
+                    }
+                    if (!empty($adjustProgram?->protein)) {
                         $program->protein = $adjustProgram->protein;
+                    }
+                    if (!empty($adjustProgram?->carbs)) {
                         $program->carbs = $adjustProgram->carbs;
+                    }
+                    if (!empty($adjustProgram?->fat)) {
                         $program->fat = $adjustProgram->fat;
                     }
 

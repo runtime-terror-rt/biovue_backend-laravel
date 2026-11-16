@@ -44,8 +44,11 @@ class ProjectionController extends Controller
             ->latest()
             ->get();
 
+        $hasTrainerConnection = DB::table('connect_user_proffesions')->where('user_id', $user->id)->exists();
+        $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
+
         if ($projections->isEmpty()) {
-            if (!$hasPaidPlan && !$isTrialActive) {
+            if (!$hasPaidPlan && !$isTrialActive && !$isInvited) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Your trial access period has expired. Please subscribe to a plan to view your projections.',
@@ -162,9 +165,10 @@ class ProjectionController extends Controller
             ->exists();
         $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
 
-        // If user has no personal paid plan but is an invited client, grant Plus-tier feature permissions (6mo/1yr, 1k/2k)
-        if (!$isPremium && !$isPlus && $isInvited) {
-            $isPlus = true;
+        // If user is an invited client under a trainer, grant Premium-tier feature permissions
+        if ($isInvited) {
+            $isPremium = true;
+            $isPlus    = true;
         }
 
         $isFree = !$isPremium && !$isPlus;
@@ -640,5 +644,85 @@ class ProjectionController extends Controller
         }
 
         return '';
+    }
+
+    /**
+     * Compare projections side-by-side
+     */
+    public function compareProjections(Request $request)
+    {
+        $loggedInUser = auth()->user();
+        $id1 = $request->query('base_id') ?: ($request->query('id1') ?: $request->input('base_id'));
+        $id2 = $request->query('target_id') ?: ($request->query('id2') ?: $request->input('target_id'));
+
+        if (!$id1) {
+            return response()->json([
+                'success' => false,
+                'message' => 'base_id or id1 is required.'
+            ], 422);
+        }
+
+        $p1 = ProjectionData::find($id1);
+        if (!$p1) {
+            return response()->json(['success' => false, 'message' => 'Base projection not found.'], 404);
+        }
+
+        $p2 = $id2 ? ProjectionData::find($id2) : null;
+
+        // Authorize access
+        foreach (array_filter([$p1, $p2]) as $proj) {
+            if ($proj->user_id !== $loggedInUser->id && $loggedInUser->user_type !== 'admin') {
+                $isConnected = DB::table('connect_user_proffesions')
+                    ->where('profession_id', $loggedInUser->id)
+                    ->where('user_id', $proj->user_id)
+                    ->exists();
+
+                if (!$isConnected && $loggedInUser->user_type !== 'professional') {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Unauthorized to view these projections.'
+                    ], 403);
+                }
+            }
+        }
+
+        $formatProj = function($proj) {
+            $pData = $proj->projections_data;
+            return [
+                'id'          => $proj->id,
+                'timeframe'   => $proj->timeframe,
+                'input_image' => !empty($proj->input_image) ? asset('storage/' . ltrim(str_replace('storage/', '', $proj->input_image), '/')) : null,
+                'created_at'  => $proj->created_at->format('Y-m-d'),
+                'current_lifestyle' => [
+                    'label'            => "Current lifestyle trajectory for " . $proj->timeframe,
+                    'image'            => $this->resolveProjectionImageUrl($pData['current_lifestyle'] ?? null),
+                    'est_bmi'          => $pData['current_lifestyle']['est_bmi'] ?? 'N/A',
+                    'est_weight'       => $pData['current_lifestyle']['est_weight'] ?? 'N/A',
+                    'expected_changes' => $pData['current_lifestyle']['expected_changes'] ?? [],
+                ],
+                'future_goal' => [
+                    'label'            => "Target goal achievement in " . $proj->timeframe,
+                    'image'            => $this->resolveProjectionImageUrl($pData['future_goal'] ?? null),
+                    'est_bmi'          => $pData['future_goal']['est_bmi'] ?? 'N/A',
+                    'est_weight'       => $pData['future_goal']['est_weight'] ?? 'N/A',
+                    'expected_changes' => $pData['future_goal']['expected_changes'] ?? [],
+                ],
+            ];
+        };
+
+        $proj1Formatted = $formatProj($p1);
+        $proj2Formatted = $p2 ? $formatProj($p2) : null;
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'side_by_side' => [
+                    'left'  => $proj1Formatted['current_lifestyle'] ?? $proj1Formatted,
+                    'right' => $p2 ? ($proj2Formatted['future_goal'] ?? $proj2Formatted) : ($proj1Formatted['future_goal'] ?? null),
+                ],
+                'projection_1' => $proj1Formatted,
+                'projection_2' => $proj2Formatted,
+            ]
+        ]);
     }
 }

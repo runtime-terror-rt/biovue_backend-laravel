@@ -256,8 +256,11 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/adjust-program', [AdjustProgramController::class, 'storeOrUpdate']);
         Route::get('/adjust-program/{id}', [AdjustProgramController::class, 'show']);
+        Route::get('/client-macros/{id?}', [AdjustProgramController::class, 'getClientMacros']);
+        Route::get('/clients/{id}/macros', [AdjustProgramController::class, 'getClientMacros']);
         Route::post('/client-macros', [AdjustProgramController::class, 'setClientMacros']);
         Route::post('/clients/{id}/macros', [AdjustProgramController::class, 'setClientMacros']);
+        Route::post('/client-macros/calculate', [AdjustProgramController::class, 'calculateMacros']);
 
         Route::post('ads', [AdsController::class, 'storeOrUpdate']);
         Route::delete('ads/{id}', [AdsController::class, 'destroy']);
@@ -310,7 +313,9 @@ Route::prefix('v1')->group(function () {
 
         // Projections
         Route::post('/generate/projections', [ProjectionController::class, 'generateProjection']);
-         Route::get('/projections/limit-expired', [UserProfileController::class, 'getProjectionLimitAndExpiredAt']);
+        Route::get('/projections/limit-expired', [UserProfileController::class, 'getProjectionLimitAndExpiredAt']);
+        Route::get('/projections/compare', [ProjectionController::class, 'compareProjections']);
+        Route::post('/projections/compare', [ProjectionController::class, 'compareProjections']);
         Route::get('/projections/{id}', [ProjectionController::class, 'show']);
         Route::get('/my-projections', [ProjectionController::class, 'index']);
         Route::get('/user/notification', [NotificationController::class, 'getSettings']);

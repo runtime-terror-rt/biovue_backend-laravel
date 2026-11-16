@@ -196,17 +196,21 @@ class TargetGoalController extends Controller
             }
 
             $goals->transform(function ($g) use ($macros, $adjust, $connectedTrainer) {
-                if (!$g->macros && $macros) {
+                if ($macros) {
                     $g->macros = $macros;
+                    if (!empty($macros->calories)) $g->calories = $macros->calories;
+                    if (!empty($macros->protein))  $g->protein = $macros->protein;
+                    if (!empty($macros->carbs))    $g->carbs = $macros->carbs;
+                    if (!empty($macros->fat))      $g->fat = $macros->fat;
                 }
-                if (!$g->trainer && $connectedTrainer) {
+                if ($connectedTrainer) {
                     $g->trainer = $connectedTrainer;
                 }
                 if ($adjust) {
-                    if (!$g->workout_routine && !empty($adjust->programs)) {
+                    if (!empty($adjust->programs)) {
                         $g->workout_routine = $adjust->programs;
                     }
-                    if (!$g->supplement_notes && !empty($adjust->note)) {
+                    if (!empty($adjust->note)) {
                         $g->supplement_notes = $adjust->note;
                     }
                 }

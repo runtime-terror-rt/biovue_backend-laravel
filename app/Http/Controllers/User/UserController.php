@@ -194,14 +194,22 @@ class UserController extends Controller
                 return response()->json(['success' => false, 'message' => 'User not found'], 404);
             }
 
-            $startOfWeek = now()->startOfWeek()->toDateString();
-            $endOfWeek   = now()->today()->toDateString();
+            $userTimezone = \App\Services\TimezoneService::resolveUserTimezone($user);
+            $nowInUserTz  = \Carbon\Carbon::now($userTimezone);
+            $today        = $nowInUserTz->toDateString();
+            $startOfWeek  = $nowInUserTz->copy()->subDays(6)->toDateString();
+            $endOfWeek    = $today;
 
             $activityLogs  = DB::table('activity_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->orderBy('log_date', 'desc')->get();
             $nutritionLogs = DB::table('user_nutrition_calculates')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
             $hydrationLogs = DB::table('hydration_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
             $sleepLogs     = DB::table('sleep_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
             $stressLogs    = DB::table('stress_logs')->where('user_id', $id)->whereBetween('log_date', [$startOfWeek, $endOfWeek])->get();
+
+            $todayActivity  = $activityLogs->firstWhere('log_date', $today);
+            $todaySleep     = $sleepLogs->firstWhere('log_date', $today);
+            $todayHydration = $hydrationLogs->firstWhere('log_date', $today);
+            $todayNutrition = $nutritionLogs->where('log_date', $today);
 
             $latestLog    = $activityLogs->first();
             $activityUnit = ($latestLog && !empty($latestLog->unit))
@@ -363,17 +371,28 @@ class UserController extends Controller
                             'total_fat'      => round($nutritionLogs->sum('fat_value'),      2),
                         ],
                         'daily_steps' => [
-                            'current'    => number_format((int)round($avgSteps)),
-                            'coach_plan' => number_format($stepGoal) . ' steps',
+                            'current'      => number_format((int)round($todayActivity ? ($todayActivity->daily_steps ?? $avgSteps) : $avgSteps)),
+                            'today'        => $todayActivity ? (int)($todayActivity->daily_steps ?? 0) : 0,
+                            'today_logged' => (bool)$todayActivity,
+                            'avg'          => number_format((int)round($avgSteps)),
+                            'coach_plan'   => number_format($stepGoal) . ' steps',
                         ],
                         'sleep_hours' => [
-                            'current'    => round($avgSleep, 1) . ' Hrs',
-                            'coach_plan' => $sleepTarget . ' Hrs',
+                            'current'      => round($todaySleep ? ($todaySleep->sleep_hours ?? $avgSleep) : $avgSleep, 1) . ' Hrs',
+                            'today'        => $todaySleep ? round((float)$todaySleep->sleep_hours, 1) : 0,
+                            'today_logged' => (bool)$todaySleep,
+                            'avg'          => round($avgSleep, 1) . ' Hrs',
+                            'coach_plan'   => $sleepTarget . ' Hrs',
                         ],
                         'hydration' => [
-                            'current'         => $avgDailyGlasses,
-                            'current_glasses' => $avgDailyGlasses . ' glasses',
-                            'current_oz'      => $avgDailyOz . ' oz',
+                            'current'         => $todayHydration ? round((float)($todayHydration->water_glasses ?? $avgDailyGlasses), 1) : $avgDailyGlasses,
+                            'current_glasses' => ($todayHydration ? round((float)($todayHydration->water_glasses ?? $avgDailyGlasses), 1) : $avgDailyGlasses) . ' glasses',
+                            'current_oz'      => ($todayHydration && (float)($todayHydration->water_oz ?? 0) > 0 ? (float)$todayHydration->water_oz : $avgDailyOz) . ' oz',
+                            'today_glasses'   => $todayHydration ? round((float)($todayHydration->water_glasses ?? 0), 1) : 0,
+                            'today_oz'        => $todayHydration ? round((float)($todayHydration->water_oz ?? 0), 1) : 0,
+                            'today_logged'    => (bool)$todayHydration,
+                            'avg_glasses'     => $avgDailyGlasses . ' glasses',
+                            'avg_oz'          => $avgDailyOz . ' oz',
                             'target'          => $waterTargetOz . ' oz',
                             'target_glasses'  => $waterTargetGlasses . ' glasses',
                             'target_oz'       => $waterTargetOz . ' oz',
@@ -583,12 +602,15 @@ class UserController extends Controller
     public function getDashboardData(Request $request, $userId = null)
     {
         $id = $userId ?: auth()->id();
-        $days = (int) $request->query('days', 7); 
-        $startDate = now()->subDays($days - 1)->toDateString();
-        $endDate = now()->toDateString();
-
         $user = User::with(['profile', 'targetGoals', 'adjustProgram'])->find($id);
         if (!$user) return response()->json(['message' => 'User not found'], 404);
+
+        $userTimezone = \App\Services\TimezoneService::resolveUserTimezone($user, $request);
+        $nowInUserTz  = \Carbon\Carbon::now($userTimezone);
+        $today        = $nowInUserTz->toDateString();
+        $days = (int) $request->query('days', 7); 
+        $startDate = $nowInUserTz->copy()->subDays($days - 1)->toDateString();
+        $endDate   = $today;
 
         $unit = $user->profile->unit ?? 'imperial';
         $unitLabel = ($unit === 'imperial') ? 'lbs' : 'kg';
@@ -624,7 +646,7 @@ class UserController extends Controller
         // Generate daily status for consistency bars and unique logged days
         $periodDates = [];
         for ($i = $days - 1; $i >= 0; $i--) {
-            $periodDates[] = now()->subDays($i);
+            $periodDates[] = $nowInUserTz->copy()->subDays($i);
         }
 
         $buildDayList = function($isLoggedCallback) use ($periodDates) {
@@ -683,6 +705,10 @@ class UserController extends Controller
         $hydrationAvg = ($unit === 'imperial') ? $avgHydrationOz : $avgHydrationGlasses;
         $hydrationSuffix = ($unit === 'imperial') ? "Ounces avg" : "glasses avg";
 
+        $todayActivity  = $activityLogs->firstWhere('log_date', $today);
+        $todaySleep     = $sleepLogs->firstWhere('log_date', $today);
+        $todayHydration = $hydrationLogs->firstWhere('log_date', $today);
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -728,16 +754,27 @@ class UserController extends Controller
                         'insight' => "Workouts logged via steps/activity"
                     ],
                     'steps' => [
-                        'current' => (int) ($activityLogs->avg('daily_steps') ?? 0),
-                        'goal' => ($user->targetGoals->daily_step_goal ?? 8000) . " steps"
+                        'current'      => (int) ($todayActivity ? ($todayActivity->daily_steps ?? $activityLogs->avg('daily_steps')) : ($activityLogs->avg('daily_steps') ?? 0)),
+                        'today'        => (int) ($todayActivity->daily_steps ?? 0),
+                        'today_logged' => (bool)$todayActivity,
+                        'avg'          => (int) ($activityLogs->avg('daily_steps') ?? 0),
+                        'goal'         => ($user->targetGoals->daily_step_goal ?? 8000) . " steps"
                     ],
                     'sleep' => [
-                        'avg' => $avgSleep,
-                        'goal' => "7-9 hours"
+                        'current'      => ($todaySleep ? round($todaySleep->sleep_hours, 1) : $avgSleep),
+                        'today'        => $todaySleep ? round((float)$todaySleep->sleep_hours, 1) : 0,
+                        'today_logged' => (bool)$todaySleep,
+                        'avg'          => $avgSleep,
+                        'goal'         => "7-9 hours"
                     ],
                     'hydration' => [
-                        'current' => $avgHydrationGlasses . " Glasses (" . $avgHydrationOz . " oz)",
-                        'goal' => (($user->targetGoals->water_target ?? 8) > 30) 
+                        'current'         => ($todayHydration ? round((float)($todayHydration->water_glasses ?? $avgHydrationGlasses), 1) : $avgHydrationGlasses) . " Glasses (" . ($todayHydration && (float)$todayHydration->water_oz > 0 ? (float)$todayHydration->water_oz : $avgHydrationOz) . " oz)",
+                        'today_glasses'   => $todayHydration ? round((float)$todayHydration->water_glasses ?? 0, 1) : 0,
+                        'today_oz'        => $todayHydration ? round((float)$todayHydration->water_oz ?? 0, 1) : 0,
+                        'today_logged'    => (bool)$todayHydration,
+                        'avg_glasses'     => $avgHydrationGlasses,
+                        'avg_oz'          => $avgHydrationOz,
+                        'goal'            => (($user->targetGoals->water_target ?? 8) > 30) 
                             ? round(($user->targetGoals->water_target) / 8, 1) . " Glasses (" . $user->targetGoals->water_target . " oz)"
                             : ($user->targetGoals->water_target ?? 8) . " Glasses"
                     ],
@@ -814,15 +851,19 @@ class UserController extends Controller
     public function userOverviewData(Request $request, $userId = null)
     {
         $id = $userId ?: ($request->query('user_id') ?: ($request->query('client_id') ?: auth()->id()));
-        $days = (int) $request->query('days', 7); 
-        $startDate = now()->subDays($days - 1)->toDateString();
-        $endDate = now()->toDateString();
 
         $user = User::with(['profile', 'targetGoals' => function($q) {
             $q->where('is_active', true);
         }, 'adjustProgram'])->find($id);
 
         if (!$user) return response()->json(['message' => 'User not found'], 404);
+
+        $userTimezone = \App\Services\TimezoneService::resolveUserTimezone($user, $request);
+        $nowInUserTz  = \Carbon\Carbon::now($userTimezone);
+        $today        = $nowInUserTz->toDateString();
+        $days         = (int) $request->query('days', 7); 
+        $startDate    = $nowInUserTz->copy()->subDays($days - 1)->toDateString();
+        $endDate      = $today;
 
         $unit = $user->profile->unit ?? 'imperial';
         $unitLabel = ($unit === 'imperial') ? 'lbs' : 'kg';
@@ -914,17 +955,28 @@ class UserController extends Controller
                         'avg_calories' => round($nutritionLogs->avg('calories_value') ?? 0) . " kcal/day"
                     ],
                     'steps' => [
-                        'avg' => (int) ($activityLogs->avg('daily_steps') ?? 0),
-                        'coach_plan' => number_format($target->daily_step_goal ?? 0) . " steps"
+                        'current'      => (int) ($todayActivity ? ($todayActivity->daily_steps ?? $activityLogs->avg('daily_steps')) : ($activityLogs->avg('daily_steps') ?? 0)),
+                        'today'        => (int) ($todayActivity->daily_steps ?? 0),
+                        'today_logged' => (bool)$todayActivity,
+                        'avg'          => (int) ($activityLogs->avg('daily_steps') ?? 0),
+                        'coach_plan'   => number_format($target->daily_step_goal ?? 0) . " steps"
                     ],
                     'sleep' => [
-                        'avg' => $avgSleep . " Hrs",
-                        'coach_plan' => ($target->sleep_target ?? '7-8') . " Hrs"
+                        'current'      => ($todaySleep ? round($todaySleep->sleep_hours, 1) : $avgSleep) . " Hrs",
+                        'today'        => $todaySleep ? round((float)$todaySleep->sleep_hours, 1) : 0,
+                        'today_logged' => (bool)$todaySleep,
+                        'avg'          => $avgSleep . " Hrs",
+                        'coach_plan'   => ($target->sleep_target ?? '7-8') . " Hrs"
                     ],
                     'hydration' => [
-                        'avg' => $avgOz . " oz",
-                        'avg_glasses' => $avgGlasses . " glasses",
-                        'coach_target' => ($target && $target->water_target ? (($target->water_target > 30) ? $target->water_target : ($target->water_target * 8)) : 64) . " oz"
+                        'current'         => ($todayHydration ? round((float)($todayHydration->water_glasses ?? $avgGlasses), 1) : $avgGlasses) . " glasses",
+                        'current_oz'      => ($todayHydration && (float)$todayHydration->water_oz > 0 ? (float)$todayHydration->water_oz : $avgOz) . " oz",
+                        'today_glasses'   => $todayHydration ? round((float)$todayHydration->water_glasses ?? 0, 1) : 0,
+                        'today_oz'        => $todayHydration ? round((float)$todayHydration->water_oz ?? 0, 1) : 0,
+                        'today_logged'    => (bool)$todayHydration,
+                        'avg'             => $avgOz . " oz",
+                        'avg_glasses'     => $avgGlasses . " glasses",
+                        'coach_target'    => ($target && $target->water_target ? (($target->water_target > 30) ? $target->water_target : ($target->water_target * 8)) : 64) . " oz"
                     ]
                 ]
             ]
@@ -1317,12 +1369,15 @@ class UserController extends Controller
                 }
             }
 
-            $daysCount = (int) $request->query('days', 7); 
-            $startDate = now()->subDays($daysCount - 1)->startOfDay();
-            $endDate = now()->endOfDay();
-
             $userData = \App\Models\User::with(['profile', 'targetGoals', 'adjustProgram'])->find($targetId);
             if (!$userData) return response()->json(['success' => false, 'message' => 'User not found'], 404);
+
+            $userTimezone = \App\Services\TimezoneService::resolveUserTimezone($userData, $request);
+            $nowInUserTz  = \Carbon\Carbon::now($userTimezone);
+
+            $daysCount = (int) $request->query('days', 7); 
+            $startDate = $nowInUserTz->copy()->subDays($daysCount - 1)->startOfDay();
+            $endDate   = $nowInUserTz->copy()->endOfDay();
 
             $activity = DB::table('activity_logs')
                 ->where('user_id', $targetId)
