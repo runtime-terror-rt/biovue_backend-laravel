@@ -58,9 +58,14 @@ class LoginController extends Controller
             $planDuration = $this->getPlanDuration($user);
             $projectionCredits = $user->projectionCredits ? $user->projectionCredits->projection_limit : 0;
 
-            $hasTrainerConnection = DB::table('connect_user_proffesions')->where('user_id', $user->id)->exists()
-                || DB::table('connect_to_professions')->where('user_id', $user->id)->exists();
-            $isInvitedOrConnected = (bool)$user->is_invited || $hasTrainerConnection;
+            $userRole = strtolower($user->getRoleNames()->first() ?? $user->user_type ?? '');
+            $isProfessional = in_array($userRole, ['professional', 'trainer', 'trainer_coach', 'nutritionist', 'supplier', 'supplement_supplier']);
+
+            $hasTrainerConnection = !$isProfessional && (
+                DB::table('connect_user_proffesions')->where('user_id', $user->id)->exists()
+                || DB::table('connect_to_professions')->where('user_id', $user->id)->exists()
+            );
+            $isInvitedOrConnected = !$isProfessional && ((bool)$user->is_invited || $hasTrainerConnection);
             $effectivePlanName = $user->plan ? $user->plan->name : ($isInvitedOrConnected ? 'Premium' : null);
 
             return response()->json([

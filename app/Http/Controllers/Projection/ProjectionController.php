@@ -44,8 +44,10 @@ class ProjectionController extends Controller
             ->latest()
             ->get();
 
-        $hasTrainerConnection = DB::table('connect_user_proffesions')->where('user_id', $user->id)->exists();
-        $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
+        $userRole = strtolower($user->getRoleNames()->first() ?? $user->user_type ?? '');
+        $isProfessional = in_array($userRole, ['professional', 'trainer', 'trainer_coach', 'nutritionist', 'supplier', 'supplement_supplier']);
+        $hasTrainerConnection = !$isProfessional && DB::table('connect_user_proffesions')->where('user_id', $user->id)->exists();
+        $isInvited = !$isProfessional && ((bool)$user->is_invited || $hasTrainerConnection);
 
         if ($projections->isEmpty()) {
             if (!$hasPaidPlan && !$isTrialActive && !$isInvited) {
@@ -160,10 +162,12 @@ class ProjectionController extends Controller
         $isPlus    = str_contains($planName, 'plus');
 
         // Check if user is an invited client under a trainer
-        $hasTrainerConnection = \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
+        $userRole = strtolower($user->getRoleNames()->first() ?? $user->user_type ?? '');
+        $isProfessional = in_array($userRole, ['professional', 'trainer', 'trainer_coach', 'nutritionist', 'supplier', 'supplement_supplier']);
+        $hasTrainerConnection = !$isProfessional && \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
             ->where('user_id', $user->id)
             ->exists();
-        $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
+        $isInvited = !$isProfessional && ((bool)$user->is_invited || $hasTrainerConnection);
 
         // If user is an invited client under a trainer, grant Premium-tier feature permissions
         if ($isInvited) {

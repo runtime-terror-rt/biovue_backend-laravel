@@ -346,14 +346,37 @@ class UserProfileController extends Controller
         $planName = strtolower($userPlan?->name ?? 'free trial');
         $isFreeTrial = str_contains($planName, 'free') || ($latestPayment && $latestPayment->is_trial);
 
+        $userRole = strtolower($user->getRoleNames()->first() ?? $user->user_type ?? '');
+        $isProfessional = in_array($userRole, ['professional', 'trainer', 'trainer_coach', 'nutritionist', 'supplier', 'supplement_supplier']);
+
+        // Check trainer connection for invited clients (applies strictly to individual clients, not professionals)
+        $hasTrainerConnection = !$isProfessional && \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
+            ->where('user_id', $user->id)
+            ->exists();
+        $isInvited = !$isProfessional && ((bool)$user->is_invited || $hasTrainerConnection);
+
+        $defaultLimit = $userPlan?->projection_limit ?? ($isInvited ? 4 : 1);
         $projectionCredit = ProjectionCredit::firstOrCreate(
             ['user_id' => $user->id],
             [
-                'projection_limit' => $userPlan?->projection_limit ?? 1,
-                'member_limit'     => 0,
+                'projection_limit' => $defaultLimit,
+                'member_limit'     => $userPlan?->member_limit ?? 0,
                 'expiry_date'      => $user->trial_ends_at ?: now()->addDays(7),
             ]
         );
+
+        // Ensure projection credit reflects active plan or Premium tier for invited clients
+        if ($userPlan && $userPlan->projection_limit > 0 && $projectionCredit->projection_limit < $userPlan->projection_limit) {
+            $projectionCredit->update([
+                'projection_limit' => $userPlan->projection_limit
+            ]);
+        } elseif ($isInvited && !$userPlan && $projectionCredit->projection_limit < 4) {
+            $premiumPlan = \App\Models\Plan::where('plan_type', 'individual')->where('name', 'like', '%premium%')->first();
+            $defaultPremiumLimit = $premiumPlan?->projection_limit ?? 4;
+            $projectionCredit->update([
+                'projection_limit' => $defaultPremiumLimit
+            ]);
+        }
 
         $activePaidSub = $latestPayment 
             && in_array($latestPayment->status, ['paid', 'active']) 
@@ -361,12 +384,6 @@ class UserProfileController extends Controller
             && !in_array($latestPayment->status, ['pending_cancellation', 'cancelled']);
 
         $isCancelled = $latestPayment && in_array($latestPayment->status, ['pending_cancellation', 'cancelled']);
-
-        // Check trainer connection for invited clients
-        $hasTrainerConnection = \Illuminate\Support\Facades\DB::table('connect_user_proffesions')
-            ->where('user_id', $user->id)
-            ->exists();
-        $isInvited = (bool)$user->is_invited || $hasTrainerConnection;
 
         $countdownExpiredAt = null;
         $showCountdown = false;
