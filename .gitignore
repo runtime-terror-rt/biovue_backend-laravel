@@ -22,6 +22,4 @@ Thumbs.db
 config.bat
 .env.docker
 vite.config.js
-.env.production
-.env
 /biovue-frontend/
